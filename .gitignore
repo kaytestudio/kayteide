@@ -9,3 +9,11 @@ build/
 
 ._*
 Icon
+
+# Generated build output (contains local machine paths)
+CMakeCache.txt
+CMakeFiles/
+*.pro.user
+components/lib/
+components/components
+plugins/pas2dox/Makefile

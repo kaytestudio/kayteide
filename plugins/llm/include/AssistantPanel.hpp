@@ -95,7 +95,7 @@ private:
     void    onModelChanged(bool userInitiated);
     void    onLoginStatus(CliAgentClient::Provider provider, bool installed,
                           bool loggedIn, const QString &detail);
-    void    promptSignIn(CliAgentClient::Provider provider, bool installed);
+    QString notReadyText(CliAgentClient::Provider provider, bool installed) const;
     void    abortTag(const QString &tag);
     QString systemPrompt() const;
     QString projectRootForEdits() const;
@@ -108,9 +108,6 @@ private:
     CliAgentClient      m_cli;
     QHash<int, bool>    m_cliSignedIn;          // CliAgentClient::Provider -> signed in
     QStringList         m_ollamaModels;
-    QTimer             *m_loginPoll   { nullptr };
-    int                 m_pollProvider { -1 };
-    int                 m_pollCount   { 0 };
     qint64              m_askStarted  { 0 };
     bool                m_modelChosen { false };   // user picked / session resumed
     QString             m_activeKey;               // model currently selected

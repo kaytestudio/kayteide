@@ -12,8 +12,8 @@ namespace Kayte::Llm {
 // Runs Claude (Claude Code CLI) and Codex (OpenAI Codex CLI) as the assistant's
 // cloud providers. Each request is a one-shot `claude -p` / `codex exec` run in
 // the project folder - read-only, or able to edit files (never run commands)
-// when the assistant's "Edit files" mode is on. Sign-in is done by the CLIs themselves
-// (`claude auth login`, `codex login`), so KayteIDE never handles credentials.
+// when the assistant's "Edit files" mode is on. Sign-in is done by the user with the CLIs
+// themselves, so KayteIDE never handles credentials.
 //
 // Signals use the same (tag, text) shape as OllamaClient so the panel can treat
 // every provider alike.
@@ -29,11 +29,8 @@ public:
 
     static QString name(Provider p);
     static QString executable(Provider p);   // empty when the CLI isn't installed
-    static QString loginCommand(Provider p);
-    static QString installCommand(Provider p);
 
     void checkLogin(Provider p);
-    bool openTerminal(const QString &command);  // Terminal.app / x-terminal-emulator / cmd
 
     // allowEdits: the agent may change files in workingDir (never run
     // commands); otherwise it only reads.

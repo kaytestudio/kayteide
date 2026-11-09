@@ -124,14 +124,6 @@ AssistantPanel::AssistantPanel(QWidget *parent)
         if (tag == QLatin1String(kAnswerTag)) m_statusLbl->setText(what);
     });
 
-    // While the user signs in from Terminal, re-check every few seconds.
-    m_loginPoll = new QTimer(this);
-    m_loginPoll->setInterval(3000);
-    connect(m_loginPoll, &QTimer::timeout, this, [this] {
-        if (m_pollProvider < 0 || ++m_pollCount > 200) { m_loginPoll->stop(); return; }
-        m_cli.checkLogin(static_cast<CliAgentClient::Provider>(m_pollProvider));
-    });
-
     rebuildModelList();
     m_statusLbl->setText(tr("Connecting to Ollama..."));
     m_client.ensureServer();
@@ -399,9 +391,6 @@ void AssistantPanel::onModelChanged(bool userInitiated)
     const auto p = cliProvider(key);
     if (userInitiated) LlmLog::write(QStringLiteral("panel"), QStringLiteral("selected %1").arg(currentLabel()));
     m_statusLbl->setText(tr("Checking %1 sign-in...").arg(CliAgentClient::name(p)));
-    // Ask for sign-in only when the user picked it (not on startup / resume).
-    m_pollProvider = userInitiated ? int(p) : -1;
-    m_pollCount    = 0;
     m_cli.checkLogin(p);
 }
 
@@ -414,7 +403,6 @@ void AssistantPanel::onLoginStatus(CliAgentClient::Provider p, bool installed,
                          cliProvider(currentKey()) == p;
 
     if (loggedIn) {
-        if (m_pollProvider == int(p)) { m_pollProvider = -1; m_loginPoll->stop(); }
         if (current) {
             m_statusLbl->setTextFormat(Qt::PlainText);
             m_statusLbl->setText(tr("%1 signed in: %2").arg(CliAgentClient::name(p), detail));
@@ -425,69 +413,16 @@ void AssistantPanel::onLoginStatus(CliAgentClient::Provider p, bool installed,
     }
 
     if (!current) return;
-    m_statusLbl->setTextFormat(Qt::RichText);
-    m_statusLbl->setText(installed
-        ? tr("%1 is not signed in. <a href='signin'>Sign in...</a>").arg(CliAgentClient::name(p))
-        : tr("%1 CLI is not installed. <a href='install'>Install...</a>").arg(CliAgentClient::name(p)));
-    disconnect(m_statusLbl, &QLabel::linkActivated, nullptr, nullptr);
-    connect(m_statusLbl, &QLabel::linkActivated, this, [this, p, installed] {
-        promptSignIn(p, installed);
-    });
-
-    // First check after the user picked this provider: ask right away.
-    if (m_pollProvider == int(p) && !m_loginPoll->isActive())
-        promptSignIn(p, installed);
+    m_statusLbl->setTextFormat(Qt::PlainText);
+    m_statusLbl->setText(notReadyText(p, installed));
 }
 
-void AssistantPanel::promptSignIn(CliAgentClient::Provider p, bool installed)
+QString AssistantPanel::notReadyText(CliAgentClient::Provider p, bool installed) const
 {
-    const QString who = CliAgentClient::name(p);
-    QMessageBox box(this);
-    box.setIcon(QMessageBox::Question);
-    box.setWindowTitle(tr("Sign in to %1").arg(who));
-    if (!installed) {
-        box.setText(tr("The %1 command-line tool is not installed.").arg(who));
-        box.setInformativeText(tr("KayteIDE can open Terminal and run:\n\n%1\n\n"
-                                  "Then come back and sign in.").arg(CliAgentClient::installCommand(p)));
-        box.addButton(tr("Install in Terminal"), QMessageBox::AcceptRole);
-    } else {
-        box.setText(tr("%1 needs you to sign in.").arg(who));
-        box.setInformativeText(p == CliAgentClient::Provider::Claude
-            ? tr("A Terminal window will run `claude auth login` and open your browser to sign "
-                 "in with your Claude account. KayteIDE never sees your password or token; "
-                 "it only records sign-in events in llm.log.")
-            : tr("A Terminal window will run `codex login` and open your browser to sign in "
-                 "with your ChatGPT account (or paste an OpenAI API key there). KayteIDE never "
-                 "sees your credentials; it only records sign-in events in llm.log."));
-        box.addButton(tr("Sign in..."), QMessageBox::AcceptRole);
-    }
-    box.addButton(QMessageBox::Cancel);
-    if (box.exec() == QMessageBox::Cancel) {
-        LlmLog::write(who, QStringLiteral("sign-in cancelled"));
-        return;
-    }
-
-    const bool terminalOpened = m_cli.openTerminal(installed ? CliAgentClient::loginCommand(p)
-                                                              : CliAgentClient::installCommand(p));
-    if (!terminalOpened) {
-        const QString error = tr("Could not open a terminal window. Install or enable a terminal app, "
-                                 "then run this command manually:\n\n%1")
-                                  .arg(installed ? CliAgentClient::loginCommand(p)
-                                                 : CliAgentClient::installCommand(p));
-        m_statusLbl->setText(error);
-        QMessageBox::warning(this, tr("Terminal unavailable"), error);
-        LlmLog::write(who, QStringLiteral("could not open terminal for sign-in"));
-        return;
-    }
-    LlmLog::write(who, installed ? QStringLiteral("sign-in started in Terminal")
-                                 : QStringLiteral("install started in Terminal"));
-    m_statusLbl->setTextFormat(Qt::PlainText);
-    m_statusLbl->setText(installed
-        ? tr("Waiting for you to finish signing in to %1 in Terminal...").arg(who)
-        : tr("Installing %1 in Terminal... pick it again when it's done.").arg(who));
-    m_pollProvider = int(p);
-    m_pollCount    = 0;
-    m_loginPoll->start();
+    return installed
+        ? tr("%1 is not signed in. Sign in with its CLI in a terminal, then pick it again.")
+              .arg(CliAgentClient::name(p))
+        : tr("%1 CLI is not installed.").arg(CliAgentClient::name(p));
 }
 
 void AssistantPanel::abortTag(const QString &tag)
@@ -764,7 +699,8 @@ void AssistantPanel::ask(const QString &prompt)
         } else {
             const auto p = cliProvider(currentKey());
             m_input->setPlainText(prompt);   // keep the question for after sign-in
-            promptSignIn(p, !CliAgentClient::executable(p).isEmpty());
+            m_statusLbl->setTextFormat(Qt::PlainText);
+            m_statusLbl->setText(notReadyText(p, !CliAgentClient::executable(p).isEmpty()));
         }
         return;
     }

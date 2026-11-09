@@ -39,13 +39,6 @@ QProcessEnvironment cliEnvironment()
     return env;
 }
 
-QString shellQuote(const QString &s)
-{
-    QString q = s;
-    q.replace(QLatin1Char('\''), QStringLiteral("'\\''"));
-    return QLatin1Char('\'') + q + QLatin1Char('\'');
-}
-
 } // namespace
 
 CliAgentClient::CliAgentClient(QObject *parent)
@@ -78,21 +71,6 @@ QString CliAgentClient::executable(Provider p)
     return found;
 }
 
-QString CliAgentClient::loginCommand(Provider p)
-{
-    const QString exe = executable(p);
-    if (exe.isEmpty()) return {};
-    return shellQuote(exe) + (p == Provider::Claude ? QStringLiteral(" auth login")
-                                                    : QStringLiteral(" login"));
-}
-
-QString CliAgentClient::installCommand(Provider p)
-{
-    return p == Provider::Claude
-        ? QStringLiteral("curl -fsSL https://claude.ai/install.sh | bash")
-        : QStringLiteral("npm install -g @openai/codex");
-}
-
 void CliAgentClient::checkLogin(Provider p)
 {
     const QString exe = executable(p);
@@ -115,12 +93,7 @@ void CliAgentClient::checkLogin(Provider p)
             const QJsonObject o = QJsonDocument::fromJson(out).object();
             loggedIn = o.value(QStringLiteral("loggedIn")).toBool();
             if (loggedIn) {
-                detail = QStringLiteral("%1 (%2%3)")
-                    .arg(o.value(QStringLiteral("email")).toString(),
-                         o.value(QStringLiteral("authMethod")).toString(),
-                         o.contains(QStringLiteral("subscriptionType"))
-                             ? QStringLiteral(", ") + o.value(QStringLiteral("subscriptionType")).toString()
-                             : QString());
+                detail = o.value(QStringLiteral("authMethod")).toString();
             }
         } else {
             loggedIn = code == 0;
@@ -134,37 +107,6 @@ void CliAgentClient::checkLogin(Provider p)
                          ? QStringList { QStringLiteral("auth"), QStringLiteral("status"),
                                          QStringLiteral("--json") }
                          : QStringList { QStringLiteral("login"), QStringLiteral("status") });
-}
-
-bool CliAgentClient::openTerminal(const QString &command)
-{
-    LlmLog::write(QStringLiteral("terminal"), command);
-#if defined(Q_OS_MACOS)
-    QString escaped = command;
-    escaped.replace(QLatin1Char('\\'), QStringLiteral("\\\\"))
-           .replace(QLatin1Char('"'), QStringLiteral("\\\""));
-    return QProcess::startDetached(QStringLiteral("osascript"),
-        { QStringLiteral("-e"), QStringLiteral("tell application \"Terminal\""),
-          QStringLiteral("-e"), QStringLiteral("activate"),
-          QStringLiteral("-e"), QStringLiteral("do script \"%1\"").arg(escaped),
-          QStringLiteral("-e"), QStringLiteral("end tell") });
-#elif defined(Q_OS_WIN)
-    return QProcess::startDetached(QStringLiteral("cmd.exe"),
-        { QStringLiteral("/c"), QStringLiteral("start"), QStringLiteral("cmd"),
-          QStringLiteral("/k"), command });
-#else
-    const QString shell = command + QStringLiteral("; exec bash");
-    for (const auto &term : { QStringList { QStringLiteral("x-terminal-emulator"), QStringLiteral("-e") },
-                              QStringList { QStringLiteral("gnome-terminal"), QStringLiteral("--") },
-                              QStringList { QStringLiteral("konsole"), QStringLiteral("-e") },
-                              QStringList { QStringLiteral("xterm"), QStringLiteral("-e") } }) {
-        if (QStandardPaths::findExecutable(term.first()).isEmpty()) continue;
-        QStringList args = term.mid(1);
-        args << QStringLiteral("bash") << QStringLiteral("-lc") << shell;
-        if (QProcess::startDetached(term.first(), args)) return true;
-    }
-    return false;
-#endif
 }
 
 // ─── Running a request ────────────────────────────────────────────────────────
