@@ -218,8 +218,8 @@ void XmlEditorWindow::onParse()
     const int warnings = diagnostics.size() - errors;
 
     m_summary->setText(ok
-        ? tr("Valid — %1 warning(s)").arg(warnings)
-        : tr("Invalid — %1 error(s), %2 warning(s)").arg(errors).arg(warnings));
+        ? tr("Valid - %1 warning(s)").arg(warnings)
+        : tr("Invalid - %1 error(s), %2 warning(s)").arg(errors).arg(warnings));
 }
 
 void XmlEditorWindow::populateTree(const XmlNode &node, QTreeWidgetItem *parentItem)
@@ -263,7 +263,7 @@ void XmlEditorWindow::populateDiagnostics(const QList<XmlDiagnostic> &diagnostic
 void XmlEditorWindow::updateWindowTitle()
 {
     const QString name = m_currentPath.isEmpty() ? tr("untitled.xml") : m_currentPath;
-    setWindowTitle(QStringLiteral("%1%2 — libreparser").arg(m_dirty ? QStringLiteral("*") : QString(), name));
+    setWindowTitle(QStringLiteral("%1%2 - libreparser").arg(m_dirty ? QStringLiteral("*") : QString(), name));
 }
 
 void XmlEditorWindow::closeEvent(QCloseEvent *event)

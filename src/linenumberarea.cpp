@@ -7,7 +7,7 @@
 #include <QHelpEvent>
 #include <QTextLayout>
 #include <QToolTip>
-#include "modebar.h"   // ModeBar::drawIcon — the same outline bug as the mode bar
+#include "modebar.h"   // ModeBar::drawIcon - the same outline bug as the mode bar
 
 // ─────────────────────────────────────────────────────────────────────────────
 LineNumberArea::LineNumberArea(QPlainTextEdit *editor, QWidget *parent)

@@ -27,7 +27,7 @@ if(APPLE)
             PATHS /opt/homebrew/opt/flex/bin /usr/local/opt/flex/bin
             NO_DEFAULT_PATH)
 endif()
-find_package(Flex REQUIRED)
+find_package(FLEX REQUIRED)
 
 # Define the Flex source file (the .l file that Flex reads)
 set(PAS2DOX_LEX_FILE "${CMAKE_CURRENT_SOURCE_DIR}/pas2dox.l")

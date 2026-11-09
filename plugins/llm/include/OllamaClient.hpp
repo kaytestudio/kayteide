@@ -13,13 +13,13 @@ class QProcess;
 namespace Kayte::Llm {
 
 // Minimal async client for a local Ollama server.
-//   * ensureServer()  – pings /api/tags, launches `ollama serve` if needed
+//   * ensureServer()  - pings /api/tags, launches `ollama serve` if needed
 //
 // The local server lives exactly as long as the IDE: the one we launch is
 // tied to our process (it stops even if the IDE crashes), and on exit any
-// local Ollama server — including one that was already running — is stopped.
-//   * listModels()    – installed models
-//   * chat()          – streaming /api/chat; requests are identified by a tag
+// local Ollama server - including one that was already running - is stopped.
+//   * listModels()    - installed models
+//   * chat()          - streaming /api/chat; requests are identified by a tag
 //                       so several (e.g. "answer", "suggest") can coexist.
 class OllamaClient : public QObject
 {

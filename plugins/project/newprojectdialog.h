@@ -8,20 +8,27 @@ namespace Ui {
     class NewProjectDialog;
 }
 
+// Asks for a project's name, type and parent folder. OK is enabled only for
+// a valid name whose folder doesn't exist yet; the caller creates the files.
 class NewProjectDialog : public QDialog
 {
     Q_OBJECT
 
 public:
+    enum ProjectType { KayteApplication = 0, CppConsole, PascalConsole, QtWidgets };
+
     explicit NewProjectDialog(QWidget *parent = nullptr);
     ~NewProjectDialog();
 
-    // You can add public methods here to get the user's choices, e.g.:
-    // QString getProjectName() const;
-    // QString getProjectPath() const;
-    // QString getProjectType() const;
+    QString projectName() const;
+    ProjectType projectType() const;
+    QString location() const;      // parent folder
+    QString projectDir() const;    // location / name
 
 private:
+    void browse();
+    void validate();
+
     Ui::NewProjectDialog *ui;
 };
 

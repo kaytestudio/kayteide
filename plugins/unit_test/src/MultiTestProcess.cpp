@@ -56,7 +56,7 @@ void MultiTestProcess::startCompile()
     const QString base = QFileInfo(src).completeBaseName();
 
     if (m_runner.mode == LanguageRunner::Mode::HeaderOnly) {
-        // Syntax-only check — no output binary
+        // Syntax-only check - no output binary
         QStringList args = m_runner.compilerFlags;
         args << src;
         m_process->disconnect(SIGNAL(finished(int,QProcess::ExitStatus)));
@@ -206,7 +206,7 @@ void MultiTestProcess::parseOutputLine(const QString &raw, const QString &contex
         return;
     }
 
-    // Detect compiler-style warnings/errors: file:line: error: …
+    // Detect compiler-style warnings/errors: file:line: error: ...
     static QRegularExpression reCompilerMsg(
         "([^:]+):(\\d+):\\s*(warning|error|note):\\s*(.*)",
         QRegularExpression::CaseInsensitiveOption);

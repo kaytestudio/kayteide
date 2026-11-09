@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16 FATAL_ERROR)
 
 project(KayteIDE
         VERSION 1.0.0
-        DESCRIPTION "KayteIDE – The Kayte Language IDE"
+        DESCRIPTION "KayteIDE - The Kayte Language IDE"
         LANGUAGES CXX
 )
 
@@ -27,9 +27,18 @@ if(APPLE)
                     CACHE STRING "Build architectures for macOS")
         endif()
     endif()
-    message(STATUS "macOS – processor: ${CMAKE_SYSTEM_PROCESSOR}  architectures: ${CMAKE_OSX_ARCHITECTURES}")
+    message(STATUS "macOS - processor: ${CMAKE_SYSTEM_PROCESSOR}  architectures: ${CMAKE_OSX_ARCHITECTURES}")
 elseif(UNIX AND NOT APPLE)
-    message(STATUS "Linux – processor: ${CMAKE_SYSTEM_PROCESSOR}")
+    message(STATUS "Linux - processor: ${CMAKE_SYSTEM_PROCESSOR}")
+elseif(WIN32)
+    message(STATUS "Windows - processor: ${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+
+# ─── MSVC ─────────────────────────────────────────────────────────────────────
+# Sources are UTF-8 (-, ›, ✔ ... in strings); without /utf-8 MSVC reads them in
+# the system code page.
+if(MSVC)
+    add_compile_options("$<$<COMPILE_LANGUAGE:C,CXX>:/utf-8>")
 endif()
 
 # ─── Custom CMake module path ─────────────────────────────────────────────────
@@ -41,6 +50,59 @@ set(UPDATER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/updater")
 
 # ─── Qt 6 ─────────────────────────────────────────────────────────────────────
 find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Concurrent Network)
+include(FetchContent)
+
+# QTermWidget supplies the PTY and VT emulator required by interactive TUIs
+# such as Claude Code and Codex. Keep the existing shell on older Qt and
+# non-Unix platforms where QTermWidget is not supported.
+set(KAYTE_QTERMWIDGET_AVAILABLE FALSE)
+if(UNIX AND NOT ANDROID AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.18.0
+   AND Qt6Core_VERSION VERSION_GREATER_EQUAL 6.6.0)
+    find_package(Qt6 6.6 REQUIRED COMPONENTS LinguistTools)
+    FetchContent_Declare(
+            lxqt2-build-tools
+            GIT_REPOSITORY https://github.com/lxqt/lxqt-build-tools.git
+            GIT_TAG        2.4.0
+    )
+    FetchContent_MakeAvailable(lxqt2-build-tools)
+    # lxqt-build-tools emits its superbuild config using the outer project
+    # name; provide the package filenames qtermwidget's find_package expects.
+    configure_file("${CMAKE_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
+                   "${CMAKE_BINARY_DIR}/lxqt2-build-tools-config.cmake" COPYONLY)
+    configure_file("${CMAKE_BINARY_DIR}/${PROJECT_NAME}-config-version.cmake"
+                   "${CMAKE_BINARY_DIR}/lxqt2-build-tools-config-version.cmake" COPYONLY)
+    set(lxqt2-build-tools_DIR "${CMAKE_BINARY_DIR}" CACHE PATH "" FORCE)
+    FetchContent_Declare(
+            qtermwidget
+            GIT_REPOSITORY https://github.com/lxqt/qtermwidget.git
+            GIT_TAG        2.4.0
+    )
+    set(QTERMWIDGET_BUILD_PYTHON_BINDING OFF CACHE BOOL "" FORCE)
+    set(BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(qtermwidget)
+    get_target_property(_qtermwidget_definitions qtermwidget6 COMPILE_DEFINITIONS)
+    list(FILTER _qtermwidget_definitions EXCLUDE REGEX "^(KB_LAYOUT_DIR|COLORSCHEMES_DIR|TRANSLATIONS_DIR)=")
+    set_target_properties(qtermwidget6 PROPERTIES
+            COMPILE_DEFINITIONS "${_qtermwidget_definitions}")
+    if(APPLE)
+        target_compile_definitions(qtermwidget6 PRIVATE
+                "KB_LAYOUT_DIR=\"$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/qtermwidget6/kb-layouts\""
+                "COLORSCHEMES_DIR=\"$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/qtermwidget6/color-schemes\""
+                "TRANSLATIONS_DIR=\"$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/qtermwidget6/translations\"")
+        set_target_properties(qtermwidget6 PROPERTIES
+                INSTALL_NAME_DIR "@rpath"
+                BUILD_WITH_INSTALL_NAME_DIR ON)
+    else()
+        target_compile_definitions(qtermwidget6 PRIVATE
+                "KB_LAYOUT_DIR=\"${qtermwidget_SOURCE_DIR}/lib/kb-layouts\""
+                "COLORSCHEMES_DIR=\"${qtermwidget_SOURCE_DIR}/lib/color-schemes\""
+                "TRANSLATIONS_DIR=\"${qtermwidget_SOURCE_DIR}/lib/translations\"")
+    endif()
+    set(KAYTE_QTERMWIDGET_AVAILABLE TRUE)
+    message(STATUS "QTermWidget enabled: full PTY terminal emulator")
+elseif(UNIX AND NOT ANDROID)
+    message(STATUS "QTermWidget requires CMake 3.18+ and Qt 6.6+; using basic shell fallback")
+endif()
 
 # ─── libgit2 ──────────────────────────────────────────────────────────────────
 find_package(PkgConfig QUIET)
@@ -48,14 +110,12 @@ if(PkgConfig_FOUND)
     pkg_check_modules(LIBGIT2 QUIET libgit2)
 endif()
 
-include(FetchContent)
-
 if(NOT LIBGIT2_FOUND)
-    message(STATUS "libgit2 not found via pkg-config – fetching via FetchContent…")
+    message(STATUS "libgit2 not found via pkg-config - fetching via FetchContent...")
     FetchContent_Declare(
             libgit2
             GIT_REPOSITORY https://github.com/libgit2/libgit2.git
-            # v1.9.7 – fixes CVE-2026-53583…53587 and CVE-2026-5917. Pinned to
+            # v1.9.7 - fixes CVE-2026-53583...53587 and CVE-2026-5917. Pinned to
             # the commit so a moved tag can't change what gets built.
             GIT_TAG        49e408b3208bc3093757a1c2db938d3590f3f412
     )
@@ -71,11 +131,11 @@ endif()
 # ─── GTK4 (optional, alongside Qt6) ────────────────────────────────────────────
 # Qt6 remains the primary toolkit everywhere (KDE on Linux, and macOS). GTK4 is
 # additionally offered, behind KAYTE_GTK4_ENABLED, on:
-#   • Linux (any architecture)
-#   • macOS (any architecture)
+#   - Linux (any architecture)
+#   - macOS (any architecture)
 # It is never pulled in on other platforms (e.g. Windows, Android), and even on
 # Linux/macOS it only actually enables once pkg-config locates a real gtk4
-# installation below — this flag just decides whether we look. Mirrors
+# installation below - this flag just decides whether we look. Mirrors
 # plugins/libreparser/CMakeLists.txt and plugins/project/CMakeLists.txt.
 set(KAYTE_GTK4_TARGET_PLATFORM FALSE)
 if(UNIX AND NOT APPLE AND NOT ANDROID)
@@ -90,18 +150,18 @@ if(KAYTE_GTK4_TARGET_PLATFORM)
         pkg_check_modules(GTK4 QUIET IMPORTED_TARGET gtk4)
         if(GTK4_FOUND)
             set(KAYTE_GTK4_AVAILABLE TRUE)
-            message(STATUS "GTK4 ${GTK4_VERSION} found (${CMAKE_SYSTEM_PROCESSOR}) – enabling KAYTE_GTK4_ENABLED")
+            message(STATUS "GTK4 ${GTK4_VERSION} found (${CMAKE_SYSTEM_PROCESSOR}) - enabling KAYTE_GTK4_ENABLED")
         else()
-            message(STATUS "GTK4 not found via pkg-config – GTK4 integration disabled")
+            message(STATUS "GTK4 not found via pkg-config - GTK4 integration disabled")
         endif()
     else()
-        message(STATUS "pkg-config not found – GTK4 integration disabled")
+        message(STATUS "pkg-config not found - GTK4 integration disabled")
     endif()
 else()
     message(STATUS "GTK4 integration not applicable on this platform")
 endif()
 
-# ─── IconFontCppHeaders (Font Awesome 6 glyph → Unicode map) ──────────────────
+# ─── IconFontCppHeaders (Font Awesome 6 glyph -> Unicode map) ──────────────────
 FetchContent_Declare(
         IconFontCppHeaders
         GIT_REPOSITORY https://github.com/juliettef/IconFontCppHeaders.git
@@ -158,10 +218,10 @@ set(SVN_CLIENT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/svn")
 
 find_package(Subversion QUIET)
 if(Subversion_FOUND)
-    message(STATUS "SVN – native libsvn ${Subversion_VERSION} found (full API mode)")
+    message(STATUS "SVN - native libsvn ${Subversion_VERSION} found (full API mode)")
     set(KAYTE_SVN_NATIVE TRUE)
 else()
-    message(STATUS "SVN – libsvn not found; using QProcess/CLI fallback (requires `svn` in PATH)")
+    message(STATUS "SVN - libsvn not found; using QProcess/CLI fallback (requires `svn` in PATH)")
     set(KAYTE_SVN_NATIVE FALSE)
 endif()
 
@@ -199,6 +259,9 @@ target_link_libraries(KayteSvnClient
 # ─── Local LLM assistant plugin (Ollama) ──────────────────────────────────────
 add_subdirectory(plugins/llm)
 
+# ─── InForm plugin (Qt6 port of the QB64 InForm GUI engine / form designer) ───
+add_subdirectory(plugins/InForm)
+
 # ─── Unit-test plugin ─────────────────────────────────────────────────────────
 set(UNIT_CLIENT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/plugins/unit_test")
 
@@ -231,30 +294,47 @@ set(PROJECT_SOURCES
         src/delphisyntaxhighlighter.cpp
         src/myjsontranslator.cpp
         src/editortabwidget.cpp
+        src/editorstatusbar.cpp
+        src/breadcrumbbar.cpp
+        src/codesymbols.cpp
         src/welcometabwidget.cpp
         plugins/project/newprojectdialog.cpp
         plugins/project/Gtk4NewProjectDialog.cpp
         src/widgetpalettedock.cpp
         src/uicanvaswidget.cpp
         src/componentseditordock.cpp
+        src/componenticons.cpp
+        src/informintegration.cpp
         src/propertyeditordock.cpp
         src/bottompanel.cpp
         src/modebar.cpp
         src/buildconfig.cpp
+        src/projectimport.cpp
+        src/projectimportsdialog.cpp
+        src/cmakeautoadd.cpp
+        src/projecttree.cpp
         src/buildconfigdialog.cpp
         src/kaytecli.cpp
         src/markdownsyntaxhighlighter.cpp
+        src/cobolsyntaxhighlighter.cpp
         src/toolchainsetupdialog.cpp
         src/largefileview.cpp
+        src/filehistorydialog.cpp
+        src/formcodeview.cpp
 )
 
 set(PROJECT_HEADERS
         src/mainwindow.h
         src/modebar.h
         src/buildconfig.h
+        src/projectimport.h
+        src/projectimportsdialog.h
+        src/cmakeautoadd.h
+        src/projecttree.h
         src/buildconfigdialog.h
         src/kaytecli.h
         src/markdownsyntaxhighlighter.h
+        src/cobolsyntaxhighlighter.h
         src/toolchainsetupdialog.h
         src/linenumberarea.h
         src/vbsyntaxhighlighter.h
@@ -264,6 +344,10 @@ set(PROJECT_HEADERS
         src/delphisyntaxhighlighter.h
         src/myjsontranslator.h
         src/editortabwidget.h
+        src/editorstatusbar.h
+        src/breadcrumbbar.h
+        src/codesymbols.h
+        src/navigationhistory.h
         src/welcometabwidget.h
         src/threads/threadmanager.h
         src/threads/posixthread.h
@@ -273,9 +357,13 @@ set(PROJECT_HEADERS
         src/widgetpalettedock.h
         src/uicanvaswidget.h
         src/componentseditordock.h
+        src/componenticons.h
+        src/informintegration.h
         src/propertyeditordock.h
         src/bottompanel.h
         src/largefileview.h
+        src/filehistorydialog.h
+        src/formcodeview.h
 )
 
 set(PROJECT_FORMS
@@ -289,7 +377,7 @@ set(PROJECT_RESOURCES
 )
 
 # ─── Font Awesome resource file ───────────────────────────────────────────────
-# Shared between KayteIDE and the updater – lives in resources/ at repo root.
+# Shared between KayteIDE and the updater - lives in resources/ at repo root.
 set(FA_QRC "${CMAKE_CURRENT_SOURCE_DIR}/resources/resources.qrc")
 set(FA_TTF "${CMAKE_CURRENT_SOURCE_DIR}/resources/fonts/fa-solid-900.ttf")
 
@@ -306,7 +394,7 @@ if(NOT EXISTS "${FA_QRC}")
 endif()
 
 if(EXISTS "${FA_TTF}")
-    message(STATUS "Font Awesome TTF found – enabling FA icon glyphs")
+    message(STATUS "Font Awesome TTF found - enabling FA icon glyphs")
     file(WRITE "${FA_QRC}"
         "<!DOCTYPE RCC>\n"
         "<RCC version=\"1.0\">\n"
@@ -316,7 +404,7 @@ if(EXISTS "${FA_TTF}")
         "</RCC>\n"
     )
 else()
-    message(STATUS "Font Awesome TTF not found – icons use text fallback. "
+    message(STATUS "Font Awesome TTF not found - icons use text fallback. "
         "Re-run cmake after placing fa-solid-900.ttf in resources/fonts/")
 endif()
 
@@ -368,9 +456,9 @@ if(FLEX_FOUND)
     set(KAYTE_PAS2DOX_EXTENSION_MAPPING "pas=C++ pp=C++ dpr=C++")
     set(KAYTE_PAS2DOX_FILTER_PATTERNS
             "*.pas=${KAYTE_PAS2DOX_EXECUTABLE} *.pp=${KAYTE_PAS2DOX_EXECUTABLE} *.dpr=${KAYTE_PAS2DOX_EXECUTABLE}")
-    message(STATUS "Flex found – building pas2dox and wiring it into Doxygen as a Pascal/Delphi filter")
+    message(STATUS "Flex found - building pas2dox and wiring it into Doxygen as a Pascal/Delphi filter")
 else()
-    message(STATUS "Flex not found – pas2dox (Pascal/Delphi Doxygen filter) will not be built")
+    message(STATUS "Flex not found - pas2dox (Pascal/Delphi Doxygen filter) will not be built")
 endif()
 
 # ─── Doxygen ──────────────────────────────────────────────────────────────────
@@ -390,10 +478,10 @@ if(DOXYGEN_FOUND)
             add_dependencies(docs pas2dox)
         endif()
     else()
-        message(WARNING "Doxyfile.in not found – skipping doc target.")
+        message(WARNING "Doxyfile.in not found - skipping doc target.")
     endif()
 else()
-    message(STATUS "Doxygen not found – documentation target disabled.")
+    message(STATUS "Doxygen not found - documentation target disabled.")
 endif()
 
 # ─── KayteIDE executable ──────────────────────────────────────────────────────
@@ -423,7 +511,13 @@ target_link_libraries(${PROJECT_NAME}
         KayteGitClient
         KayteIDE::SvnClient
         KayteLlmAssistant
+        KayteInForm
 )
+
+if(KAYTE_QTERMWIDGET_AVAILABLE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE qtermwidget6)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE KAYTE_HAVE_QTERMWIDGET=1)
+endif()
 
 target_compile_definitions(${PROJECT_NAME}
         PRIVATE
@@ -452,18 +546,53 @@ if(NOT ANDROID AND CMAKE_SYSTEM_NAME MATCHES "Darwin|Linux")
     target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
 endif()
 
+# ─── Windows (KayteIDE) ───────────────────────────────────────────────────────
+# A GUI app: no console window. NOMINMAX keeps <windows.h> from defining
+# min/max macros over std::min / std::max.
+if(WIN32)
+    set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX)
+endif()
+
 # ─── macOS bundle (KayteIDE) ──────────────────────────────────────────────────
 if(APPLE AND NOT ANDROID)
     set_target_properties(${PROJECT_NAME} PROPERTIES
             MACOSX_BUNDLE                TRUE
             MACOSX_BUNDLE_ICON_FILE      "kayte.icns"
-            MACOSX_BUNDLE_GUI_IDENTIFIER "com.ringsce.kayteide"
+            # resources/Info.plist is used verbatim (no ${...} substitution), so
+            # these MACOSX_BUNDLE_* values must match what it says.
+            MACOSX_BUNDLE_GUI_IDENTIFIER "com.kd.kayteide"
             MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
             MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
             MACOSX_BUNDLE_INFO_PLIST     "${CMAKE_SOURCE_DIR}/resources/Info.plist"
+            BUILD_RPATH                  "@executable_path/../Frameworks"
     )
+    # MACOSX_PACKAGE_LOCATION only copies files that are sources of the target,
+    # so the icon must be added here - without it the bundle has no icon and
+    # Finder / Dock / Launchpad show the generic white placeholder.
+    target_sources(${PROJECT_NAME} PRIVATE resources/kayte.icns)
     set_source_files_properties(resources/kayte.icns
             PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+
+    if(KAYTE_QTERMWIDGET_AVAILABLE)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Frameworks"
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:qtermwidget6>"
+                "$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Frameworks/$<TARGET_SONAME_FILE_NAME:qtermwidget6>"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${qtermwidget_SOURCE_DIR}/lib/kb-layouts"
+                "$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/qtermwidget6/kb-layouts"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${qtermwidget_SOURCE_DIR}/lib/color-schemes"
+                "$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/qtermwidget6/color-schemes"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${qtermwidget_SOURCE_DIR}/lib/translations"
+                "$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/qtermwidget6/translations"
+                COMMENT "Bundling QTermWidget and its terminal resources"
+                VERBATIM)
+    endif()
 
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory
@@ -480,7 +609,7 @@ if(APPLE AND NOT ANDROID)
     # kayte-container-run (runs Kayte programs in a fresh Linux VM through
     # Apple container) is a script: install it on every build, not only when
     # the IDE relinks, so edits to it always reach the bundle.
-    add_custom_target(install_kayte_container_run ALL
+    add_custom_target(kayteide_bundle_support ALL
             COMMAND ${CMAKE_COMMAND} -E make_directory
             "$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/tools/bin"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -496,16 +625,28 @@ if(APPLE AND NOT ANDROID)
             "$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/tools/scripts/requirements.sh"
             COMMAND chmod +x
             "$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/tools/scripts/requirements.sh"
+            # The updater lives in the bundle too (copied on every build, so a
+            # rebuilt updater reaches the bundle even when KayteIDE didn't relink).
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:KayteIDEUpdater>"
+            "$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/MacOS/KayteIDEUpdater"
+            # The commit this app was built from; KayteIDEUpdater compares it
+            # with the latest commit on GitHub.
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources"
+            COMMAND sh -c "git -C \"$0\" rev-parse HEAD > \"$1\" 2>/dev/null || echo unknown > \"$1\""
+                    "${CMAKE_SOURCE_DIR}"
+                    "$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/kayteide-commit.txt"
             DEPENDS "${CMAKE_SOURCE_DIR}/src/scripts/kayte-container-run.sh"
                     "${CMAKE_SOURCE_DIR}/src/scripts/requirements.sh"
-            COMMENT "Installing kayte-container-run and requirements.sh inside app bundle"
+            COMMENT "Installing kayte-container-run, requirements.sh and the build commit inside app bundle"
             VERBATIM
     )
-    add_dependencies(install_kayte_container_run ${PROJECT_NAME})
+    add_dependencies(kayteide_bundle_support ${PROJECT_NAME} KayteIDEUpdater)
 
     # Bundle the external toolchain (FPC, Lazarus, QEMU, Kayte SDK) into
     # Contents/tools at build time. Off by default: KayteIDE installs it on
-    # first launch (Tools ▸ Install / Update Toolchain…). When ON it only runs
+    # first launch (Tools > Install / Update Toolchain...). When ON it only runs
     # while the bundle has no toolchain; `cmake --build . --target
     # bundle_tools` forces a refresh either way.
     option(KAYTE_BUNDLE_TOOLS "Bundle the toolchain inside KayteIDE.app at build time" OFF)
@@ -551,10 +692,10 @@ if(NOT ANDROID)
 endif()
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Auto-Updater (KayteIDEUpdater) – built as part of the same cmake invocation
+# Auto-Updater (KayteIDEUpdater) - built as part of the same cmake invocation
 # Sources live in updater/src/; resources in updater/resources/.
 # The updater shares libgit2, IconFontCppHeaders, KayteGitClient, and
-# KayteSvnClient that were already fetched/built above – no duplication.
+# KayteSvnClient that were already fetched/built above - no duplication.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ─── Updater Font Awesome resource stub ───────────────────────────────────────
@@ -592,6 +733,7 @@ set(UPDATER_SOURCES
         ${UPDATER_DIR}/src/UpdateChecker.cpp
         ${UPDATER_DIR}/src/BuildManager.cpp
         ${UPDATER_DIR}/src/LogWidget.cpp
+        ${UPDATER_DIR}/src/AppInstaller.cpp
 )
 
 set(UPDATER_HEADERS
@@ -599,6 +741,7 @@ set(UPDATER_HEADERS
         ${UPDATER_DIR}/src/UpdateChecker.h
         ${UPDATER_DIR}/src/BuildManager.h
         ${UPDATER_DIR}/src/LogWidget.h
+        ${UPDATER_DIR}/src/AppInstaller.h
 )
 
 # ─── Updater executable ───────────────────────────────────────────────────────
@@ -640,25 +783,28 @@ if(NOT ANDROID AND CMAKE_SYSTEM_NAME MATCHES "Darwin|Linux")
     target_link_libraries(KayteIDEUpdater PRIVATE Threads::Threads)
 endif()
 
+# Windows: a GUI app, as KayteIDE.
+if(WIN32)
+    set_target_properties(KayteIDEUpdater PROPERTIES WIN32_EXECUTABLE TRUE)
+    target_compile_definitions(KayteIDEUpdater PRIVATE NOMINMAX)
+endif()
+
 # macOS bundle for updater
 if(APPLE AND NOT ANDROID)
     set_target_properties(KayteIDEUpdater PROPERTIES
             MACOSX_BUNDLE                TRUE
+            MACOSX_BUNDLE_ICON_FILE      "kayte.icns"
             MACOSX_BUNDLE_GUI_IDENTIFIER "com.ringsce.kayteide.updater"
             MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
             MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
     )
-    # After KayteIDE is bundled, embed the updater inside it so users can
-    # launch it from KayteIDE's Help menu or run it standalone.
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory
-            "$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/MacOS"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_FILE:KayteIDEUpdater>"
-            "$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/MacOS/KayteIDEUpdater"
-            COMMENT "Embedding KayteIDEUpdater inside KayteIDE.app bundle"
-            VERBATIM
-    )
+    # Same icon as KayteIDE (resources/kayte.icns is already marked for
+    # Contents/Resources); without it the standalone updater shows the
+    # generic white app icon.
+    target_sources(KayteIDEUpdater PRIVATE resources/kayte.icns)
+    # The updater is embedded in KayteIDE.app by the kayteide_bundle_support
+    # target (on every build), so users can launch it from KayteIDE or run it
+    # standalone.
 endif()
 
 # Output directory for updater binary
@@ -677,7 +823,7 @@ if(ENABLE_ASAN AND NOT ANDROID)
     endforeach()
 endif()
 
-# ─── CPack – DEB + RPM (Linux desktop only) ───────────────────────────────────
+# ─── CPack - DEB + RPM (Linux desktop only) ───────────────────────────────────
 if(NOT ANDROID AND UNIX AND NOT APPLE)
     include(GNUInstallDirs)
 
@@ -699,7 +845,7 @@ if(NOT ANDROID AND UNIX AND NOT APPLE)
 
     set(CPACK_PACKAGE_NAME              "kayteide")
     set(CPACK_PACKAGE_VERSION           "${PROJECT_VERSION}")
-    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "KayteIDE – The Kayte Language IDE")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "KayteIDE - The Kayte Language IDE")
     set(CPACK_PACKAGE_VENDOR            "ringsce")
     set(CPACK_PACKAGE_CONTACT           "contact@ringsce.com")
     set(CPACK_PACKAGE_HOMEPAGE_URL      "https://ringsce.com")

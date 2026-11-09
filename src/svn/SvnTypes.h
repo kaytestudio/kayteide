@@ -1,5 +1,5 @@
 #pragma once
-// SvnTypes.h – shared POD types and enumerations for the KaytEIDE SVN client
+// SvnTypes.h - shared POD types and enumerations for the KaytEIDE SVN client
 // C++17, Qt6
 
 #include <QString>
@@ -106,7 +106,7 @@ struct Credentials {
 // ── QMetaType registration ───────────────────────────────────────────────────
 // Declared here (in SvnTypes.h) so every translation unit that includes this
 // header sees the same declaration exactly once.  Do NOT repeat these macros
-// in SvnModel.h or anywhere else – that causes "explicit specialization after
+// in SvnModel.h or anywhere else - that causes "explicit specialization after
 // instantiation" errors when moc-generated files are compiled together.
 Q_DECLARE_METATYPE(Kayte::Svn::StatusEntry)
 Q_DECLARE_METATYPE(Kayte::Svn::StatusKind)

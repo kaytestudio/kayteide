@@ -1,5 +1,7 @@
 #include "buildconfig.h"
 
+#include <algorithm>
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -9,6 +11,7 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QStandardPaths>
 #include <QSysInfo>
 
 #include <utility>
@@ -111,7 +114,7 @@ QVector<BuildConfiguration> detectLazarus(const QString &dir, const QString &lpi
            .replace(QLatin1String("$(TargetCPU)"), cpu)
            .replace(QLatin1String("$(TargetOS)"), os);
         out = QDir::cleanPath(out);
-        // Only a plain sub-folder of the project — never ".", "..", or absolute.
+        // Only a plain sub-folder of the project - never ".", "..", or absolute.
         if (!out.contains(QLatin1Char('$')) && !QDir::isAbsolutePath(out)
             && out != QLatin1String(".") && !out.startsWith(QLatin1String("..")))
             clean = QStringLiteral("rm -rf %1").arg(quoted(out));
@@ -223,8 +226,8 @@ QVector<BuildConfiguration> detectKayte(const QString &dir, const QString &xproj
 }
 
 // ── Loose Kayte sources (no .xproj) ──────────────────────────────────────────
-// The program is main.kayte / main.kjs, the only Kayte file, or — in a folder
-// of several programs (like kayte-lang's examples/) — the file being edited.
+// The program is main.kayte / main.kjs, the only Kayte file, or - in a folder
+// of several programs (like kayte-lang's examples/) - the file being edited.
 QVector<BuildConfiguration> detectKayteFiles(const QStringList &sources)
 {
     QString file = QStringLiteral("${File}");
@@ -259,6 +262,54 @@ QVector<BuildConfiguration> detectKayteFiles(const QStringList &sources)
     };
     out << kayteContainerConfigs(file);
     return out;
+}
+
+// ── GnuCOBOL ─────────────────────────────────────────────────────────────────
+// The program is main.cob / main.cbl, the only COBOL file, or the file being
+// edited. Programs with a SCREEN SECTION (like the UI Designer's) need a real
+// terminal, so they run in Terminal.app instead of the Run panel.
+QVector<BuildConfiguration> detectCobol(const QString &dir, const QStringList &sources)
+{
+    QString file = QStringLiteral("${File}");
+    QString base = QStringLiteral("${FileBaseName}");
+    for (const QString &main : {QStringLiteral("main.cob"), QStringLiteral("main.cbl")}) {
+        if (sources.contains(main)) { file = main; base = QStringLiteral("main"); break; }
+    }
+    if (file.startsWith(QLatin1Char('$')) && sources.size() == 1) {
+        file = sources.first();
+        base = QFileInfo(file).completeBaseName();
+    }
+
+    static const QRegularExpression screenSection(QStringLiteral(R"(\bSCREEN\s+SECTION\b)"),
+                                                  QRegularExpression::CaseInsensitiveOption);
+    bool screen = false;
+    for (const QString &f : sources)
+        if (file.startsWith(QLatin1Char('$')) || f == file)
+            screen = screen || screenSection.match(readHead(dir + QLatin1Char('/') + f)).hasMatch();
+
+    // Homebrew's cobc: apps started from Finder don't have /opt/homebrew/bin
+    // (or /usr/local/bin) on PATH, so name it by its full path.
+    QString cobc = tool(QStringLiteral("cobc"));
+    if (cobc == QLatin1String("cobc")) {
+        QString found = QStandardPaths::findExecutable(cobc);
+        if (found.isEmpty())
+            found = QStandardPaths::findExecutable(cobc, {QStringLiteral("/opt/homebrew/bin"),
+                                                          QStringLiteral("/usr/local/bin")});
+        if (!found.isEmpty()) cobc = quoted(found);
+    }
+    const QString exe = quoted(QStringLiteral("${BuildDir}/") + base);
+    const QString compile = QStringLiteral(R"(mkdir -p "${BuildDir}" && %1 -x %2 -o %3 %4)");
+    const QString run = screen ? QStringLiteral("open -a Terminal ") + exe : exe;
+    return {
+        make(QStringLiteral("Debug"), QStringLiteral("build/Debug"),
+             compile.arg(cobc, QStringLiteral("-g -debug"), exe, quoted(file)),
+             QStringLiteral(R"(rm -rf "${BuildDir}")"),
+             run, QStringLiteral("lldb -- ") + exe),
+        make(QStringLiteral("Release"), QStringLiteral("build/Release"),
+             compile.arg(cobc, QStringLiteral("-O2"), exe, quoted(file)),
+             QStringLiteral(R"(rm -rf "${BuildDir}")"),
+             run, QStringLiteral("lldb -- ") + exe),
+    };
 }
 
 } // namespace
@@ -313,10 +364,24 @@ QString BuildConfigurations::toolsDir()
     return {};
 }
 
+QString BuildConfigurations::fileLanguage(const QString &path)
+{
+    const QString suffix = QFileInfo(path).suffix().toLower();
+    if (suffix == QLatin1String("cob") || suffix == QLatin1String("cbl"))
+        return QStringLiteral("cobol");
+    return {};
+}
+
 QVector<BuildConfiguration> BuildConfigurations::detect(const QString &dir, const QString &name,
-                                                       QString *kind)
+                                                       QString *kind, const QString &language)
 {
     const auto setKind = [kind](const char *k) { if (kind) *kind = QString::fromLatin1(k); };
+    const QStringList cobol = filesIn(dir, {QStringLiteral("*.cob"), QStringLiteral("*.cbl")});
+
+    if (language == QLatin1String("cobol")) {
+        setKind("GnuCOBOL");
+        return detectCobol(dir, cobol);
+    }
 
     if (const QStringList xproj = filesIn(dir, {QStringLiteral("*.xproj")}); !xproj.isEmpty()) {
         setKind("Kayte");
@@ -347,6 +412,10 @@ QVector<BuildConfiguration> BuildConfigurations::detect(const QString &dir, cons
         setKind("Kayte");
         return detectKayteFiles(kayte);
     }
+    if (!cobol.isEmpty()) {
+        setKind("GnuCOBOL");
+        return detectCobol(dir, cobol);
+    }
     setKind("Custom");
     return {make(QStringLiteral("Default"), QStringLiteral("."),
                  QStringLiteral("make all"), QStringLiteral("make clean"),
@@ -356,13 +425,16 @@ QVector<BuildConfiguration> BuildConfigurations::detect(const QString &dir, cons
 
 QString BuildConfigurations::settingsFile() const
 {
-    return m_dir.isEmpty() ? QString()
-                           : m_dir + QStringLiteral("/.kayteide/build.json");
+    if (m_dir.isEmpty()) return {};
+    return m_dir + (m_language.isEmpty() ? QStringLiteral("/.kayteide/build.json")
+                                         : QStringLiteral("/.kayteide/build-%1.json").arg(m_language));
 }
 
-void BuildConfigurations::setProject(const QString &dir, const QString &name)
+void BuildConfigurations::setProject(const QString &dir, const QString &name,
+                                     const QString &language)
 {
     m_dir  = dir;
+    m_language = language;
     m_name = name.isEmpty() ? QFileInfo(dir).fileName() : name;
     m_configs.clear();
     m_active = 0;
@@ -376,14 +448,50 @@ void BuildConfigurations::setProject(const QString &dir, const QString &name)
             if (!c.name.isEmpty()) m_configs << c;
         }
         m_kind = root.value(QStringLiteral("kind")).toString();
-        const QString active = root.value(QStringLiteral("active")).toString();
+        m_savedActive = root.value(QStringLiteral("active")).toString();
         for (int i = 0; i < m_configs.size(); ++i)
-            if (m_configs[i].name == active) m_active = i;
+            if (m_configs[i].name == m_savedActive) m_active = i;
+    } else {
+        m_savedActive.clear();
     }
     if (m_configs.isEmpty())
-        m_configs = detect(m_dir, m_name, &m_kind);
+        m_configs = detect(m_dir, m_name, &m_kind, m_language);
+    appendImported();
 
     emit changed();
+}
+
+void BuildConfigurations::setImported(const QString &dir, const QVector<BuildConfiguration> &configs,
+                                      const QString &preferredActive)
+{
+    m_importedDir = QDir(dir).absolutePath();
+    m_imported = configs;
+    m_importedPreferred = preferredActive;
+    if (!m_dir.isEmpty() && QDir(m_dir).absolutePath() == m_importedDir) {
+        const QString current = active().name;
+        m_configs.erase(std::remove_if(m_configs.begin(), m_configs.end(),
+                                       [](const BuildConfiguration &c) { return !c.origin.isEmpty(); }),
+                        m_configs.end());
+        m_active = 0;
+        for (int i = 0; i < m_configs.size(); ++i)
+            if (m_configs[i].name == current) m_active = i;
+        appendImported();
+        emit changed();
+    }
+}
+
+void BuildConfigurations::appendImported()
+{
+    if (m_imported.isEmpty() || m_dir.isEmpty() || QDir(m_dir).absolutePath() != m_importedDir) return;
+    for (const BuildConfiguration &c : std::as_const(m_imported)) {
+        bool clash = false;   // the project's own configuration of the same name wins
+        for (const BuildConfiguration &own : std::as_const(m_configs)) clash = clash || own.name == c.name;
+        if (!clash) m_configs << c;
+    }
+    // An active choice saved in build.json wins; otherwise the tool's own default.
+    const QString want = !m_savedActive.isEmpty() ? m_savedActive : m_importedPreferred;
+    for (int i = 0; i < m_configs.size(); ++i)
+        if (!want.isEmpty() && m_configs[i].name == want) m_active = i;
 }
 
 BuildConfiguration BuildConfigurations::active() const
@@ -418,7 +526,9 @@ bool BuildConfigurations::save(QString *error)
     }
 
     QJsonArray list;
-    for (const BuildConfiguration &c : m_configs) list.append(c.toJson());
+    for (const BuildConfiguration &c : m_configs)
+        if (c.origin.isEmpty()) list.append(c.toJson());   // imported ones are re-read, not stored
+    m_savedActive = active().name;
     const QJsonObject root{
         {QStringLiteral("version"), 1},
         {QStringLiteral("kind"), m_kind},

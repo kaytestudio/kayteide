@@ -1,8 +1,8 @@
 #pragma once
-// SvnModel.h – QAbstractTableModel backed by a list of StatusEntry objects.
+// SvnModel.h - QAbstractTableModel backed by a list of StatusEntry objects.
 // C++17, Qt 6
 
-#include "SvnTypes.h"   // StatusEntry, StatusKind – Q_DECLARE_METATYPE is in SvnTypes.h
+#include "SvnTypes.h"   // StatusEntry, StatusKind - Q_DECLARE_METATYPE is in SvnTypes.h
 
 #include <QAbstractTableModel>
 #include <QList>
@@ -76,6 +76,6 @@ private:
 } // namespace Kayte::Svn
 
 // NOTE: Q_DECLARE_METATYPE for Kayte::Svn types lives in SvnTypes.h.
-//       Do NOT add Q_DECLARE_METATYPE calls here – duplicate declarations
+//       Do NOT add Q_DECLARE_METATYPE calls here - duplicate declarations
 //       cause "explicit specialization after instantiation" errors in the
 //       moc-generated unity build (mocs_compilation.cpp).

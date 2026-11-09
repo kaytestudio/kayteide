@@ -1,0 +1,5 @@
+/build.bat
+/copy.bat
+# Prebuilt QB64 binaries of the original InForm – not needed by the Qt6 port
+*.exe
+.DS_Store

@@ -32,7 +32,7 @@ SvnCommitDialog::SvnCommitDialog(const QStringList &paths, QWidget *parent)
     // Commit message
     lay->addWidget(new QLabel(tr("Commit message:"), this));
     m_msgEdit = new QTextEdit(this);
-    m_msgEdit->setPlaceholderText(tr("Enter commit message…"));
+    m_msgEdit->setPlaceholderText(tr("Enter commit message..."));
     lay->addWidget(m_msgEdit, 1);
 
     // Buttons

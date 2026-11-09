@@ -95,7 +95,7 @@ void MarkdownSyntaxHighlighter::highlightBlock(const QString &text)
         setFormat(0, int(text.length()), m_rule);
         return;
     }
-    // "Title\n=====" — underline makes the previous line a heading; colour the
+    // "Title\n=====" - underline makes the previous line a heading; colour the
     // underline itself (the previous block was already highlighted).
     if (setext.match(text).hasMatch() && currentBlock().previous().isValid()
         && !currentBlock().previous().text().trimmed().isEmpty()) {

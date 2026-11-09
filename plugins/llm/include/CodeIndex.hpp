@@ -31,8 +31,8 @@ struct IndexData
     QStringList                files;             // relative paths
     QStringList                fileLanguages;     // parallel to files
     QVector<Chunk>             chunks;
-    QHash<QString, int>        vocabulary;        // term → id
-    QVector<QVector<Posting>>  postings;          // id → occurrences
+    QHash<QString, int>        vocabulary;        // term -> id
+    QVector<QVector<Posting>>  postings;          // id -> occurrences
     QMap<QString, int>         filesPerLanguage;
     double                     avgLength { 0 };
 };
@@ -57,7 +57,7 @@ public:
     int     fileCount() const  { return m_data.files.size(); }
     int     chunkCount() const { return m_data.chunks.size(); }
     QStringList files() const  { return m_data.files; }
-    QString summary() const;   // "C++ 42 · CMake 3 · …"
+    QString summary() const;   // "C++ 42 | CMake 3 | ..."
 
     QVector<CodeChunk> search(const QString &query, int limit) const;
     QVector<CodeChunk> chunksForFile(const QString &relativePath) const;
@@ -70,6 +70,7 @@ private:
 
     IndexData                 m_data;
     QFutureWatcher<IndexData> m_watcher;
+    QString                   m_pendingRoot;   // requested while a build ran
 };
 
 } // namespace Kayte::Llm

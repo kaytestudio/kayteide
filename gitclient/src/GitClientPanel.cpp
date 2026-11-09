@@ -12,7 +12,7 @@
 #include <QListWidgetItem>
 #include <QIcon>
 #include <QApplication>
-#include <QtConcurrent>
+#include <QThreadPool>
 
 namespace Kayte {
 
@@ -142,11 +142,11 @@ void GitClientPanel::setupConnections() {
     connect(m_repo, &GitRepository::operationFinished, this, &GitClientPanel::onOperationFinished);
     connect(m_repo, &GitRepository::credentialsRequired, this, &GitClientPanel::onCredentialsRequired);
 
-    // Log selection → diff
+    // Log selection -> diff
     connect(m_logView->selectionModel(), &QItemSelectionModel::currentRowChanged,
             this, &GitClientPanel::onLogSelectionChanged);
 
-    // Status list click → diff for that file
+    // Status list click -> diff for that file
     connect(m_statusList, &QListWidget::itemClicked,
             this, &GitClientPanel::onStatusItemClicked);
 
@@ -167,17 +167,17 @@ void GitClientPanel::onOpenClicked() {
 
 void GitClientPanel::onFetchClicked() {
     if (!m_repo->isOpen()) return;
-    QtConcurrent::run([this]{ m_repo->fetch(); });
+    QThreadPool::globalInstance()->start([this]{ m_repo->fetch(); });
 }
 
 void GitClientPanel::onPullClicked() {
     if (!m_repo->isOpen()) return;
-    QtConcurrent::run([this]{ m_repo->pull(); });
+    QThreadPool::globalInstance()->start([this]{ m_repo->pull(); });
 }
 
 void GitClientPanel::onPushClicked() {
     if (!m_repo->isOpen()) return;
-    QtConcurrent::run([this]{ m_repo->push(); });
+    QThreadPool::globalInstance()->start([this]{ m_repo->push(); });
 }
 
 void GitClientPanel::onCommitClicked() {
@@ -197,7 +197,7 @@ void GitClientPanel::onCredentialsRequired(const QString &url, const QString &us
         if (dlg.exec() == QDialog::Accepted) {
             // Store credentials in the repo's Impl via a public setter
             // (we expose a friend method here via a protected signal route)
-            // Simplest: re-emit with credentials – handled by a dedicated slot
+            // Simplest: re-emit with credentials - handled by a dedicated slot
             emit m_repo->credentialsRequired(url, usernameHint);
             // In a real integration you'd call m_repo->provideCredentials()
         }

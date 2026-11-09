@@ -14,6 +14,7 @@
 #include "UpdateChecker.h"
 #include "BuildManager.h"
 #include "LogWidget.h"
+#include "AppInstaller.h"
 
 class MainWindow : public QMainWindow
 {
@@ -41,6 +42,7 @@ private slots:
     void onAbortClicked();
     void onSettingsChanged();
     void onTrayActivated(QSystemTrayIcon::ActivationReason reason);
+    void onInstallClicked();
 
 private:
     void setupUi();
@@ -48,23 +50,28 @@ private:
     void applyStyleSheet();
     void setStatus(const QString &text, const QString &color = "#c9d1d9");
     void setControlsEnabled(bool enabled);
+    static QString defaultInstalledApp();
+    QString installedApp() const;
 
     // Core logic
     UpdateChecker *m_checker  = nullptr;
     BuildManager  *m_builder  = nullptr;
+    AppInstaller  *m_installer = nullptr;
+    QString        m_buildingSha;   // commit the running / last build is for
 
-    // UI – Status bar area
+    // UI - Status bar area
     QLabel      *m_statusLabel     = nullptr;
     QLabel      *m_commitLabel     = nullptr;
     QLabel      *m_lastCheckLabel  = nullptr;
     QProgressBar *m_progressBar    = nullptr;
 
-    // UI – Buttons
+    // UI - Buttons
     QPushButton *m_checkBtn  = nullptr;
     QPushButton *m_buildBtn  = nullptr;
     QPushButton *m_abortBtn  = nullptr;
+    QPushButton *m_installBtn = nullptr;
 
-    // UI – Settings
+    // UI - Settings
     QLineEdit *m_sourceDirEdit  = nullptr;
     QLineEdit *m_buildDirEdit   = nullptr;
     QLineEdit *m_installDirEdit = nullptr;
@@ -72,8 +79,10 @@ private:
     QSpinBox  *m_intervalSpin   = nullptr;
     QCheckBox *m_autoCheckBox   = nullptr;
     QCheckBox *m_installChk     = nullptr;
+    QLineEdit *m_appEdit        = nullptr;   // the installed KayteIDE.app
+    QCheckBox *m_autoUpdateChk  = nullptr;   // build + install new commits
 
-    // UI – Log
+    // UI - Log
     LogWidget *m_log = nullptr;
 
     // Tray
@@ -81,4 +90,5 @@ private:
     QMenu           *m_trayMenu = nullptr;
 
     bool m_updatePending = false;
+    bool m_loadingSettings = false;   // don't save while the form is being filled
 };

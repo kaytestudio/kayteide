@@ -19,7 +19,7 @@ class TerminalWidget;
 
 // ─── BottomPanel ──────────────────────────────────────────────────────────────
 // VSCodium-style bottom panel with five views selected from a flat tab strip:
-//   PROBLEMS · OUTPUT · DEBUG CONSOLE · TERMINAL · PORTS
+//   PROBLEMS | OUTPUT | DEBUG CONSOLE | TERMINAL | PORTS
 // The header also carries per-view actions (new / kill terminal, clear,
 // refresh) plus maximise and close buttons, like the VS Code panel.
 class BottomPanel : public QWidget
@@ -53,12 +53,15 @@ public:
     void startDebugger(const QString &command, const QString &workingDir);
 
 signals:
+    void assistantCliRequested(const QString &command);
     void problemActivated(const QString &file, int line, int column);
     // Every diagnostic as it is collected, and when the list is reset
-    // (a new task starts) — the editor marks the lines.
+    // (a new task starts) - the editor marks the lines.
     void problemAdded(const QString &file, int line, int column,
                       const QString &severity, const QString &message);
     void problemsCleared();
+    // The Problems view's error / warning totals changed.
+    void problemCountsChanged(int errors, int warnings);
     // A runTask() task ended (not emitted for one replaced by a new task).
     void taskFinished(int exitCode, bool crashed);
     void closeRequested();
@@ -84,6 +87,8 @@ private:
     void     updateProblemsBadge();
     void     parseDiagnostics(const QString &text);
     void     killTerminal();
+    void     watchTerminal(TerminalWidget *term);
+    void     removeTerminal(QWidget *w);
     QPlainTextEdit *makeConsole();
 
     // header
@@ -93,6 +98,8 @@ private:
     QComboBox      *m_terminalPick  { nullptr };
     QToolButton    *m_btnNewTerm    { nullptr };
     QToolButton    *m_btnKillTerm   { nullptr };
+    QToolButton    *m_btnClaude     { nullptr };
+    QToolButton    *m_btnCodex      { nullptr };
     QToolButton    *m_btnClear      { nullptr };
     QToolButton    *m_btnRefresh    { nullptr };
     QToolButton    *m_btnMaximize   { nullptr };

@@ -7,12 +7,12 @@
 // Contents/tools/kayte for .xproj projects:
 //
 //   kayte build [project] [--config Debug|Release]
-//   kayte run   [project] [--config …] [-- program arguments]
-//   kayte clean [project] [--config …] [--all]
+//   kayte run   [project] [--config ...] [-- program arguments]
+//   kayte clean [project] [--config ...] [--all]
 //
 // `project` is a .xproj file or a folder containing one (default: the
 // current folder). Any other arguments (--compile, --native, --run, --repl,
-// …) are passed straight to the Kayte compiler.
+// ...) are passed straight to the Kayte compiler.
 int kayteCliMain(int argc, char *argv[]);
 
 // True when argv[0] names the `kayte` tool rather than the IDE.

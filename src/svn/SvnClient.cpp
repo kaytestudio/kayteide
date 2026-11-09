@@ -1,4 +1,4 @@
-// SvnClient.cpp – KaytEIDE SVN client implementation
+// SvnClient.cpp - KaytEIDE SVN client implementation
 // Drives the `svn` CLI via QProcess on a background thread.
 // C++17, Qt 6
 

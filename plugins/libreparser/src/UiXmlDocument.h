@@ -1,5 +1,5 @@
 #pragma once
-// UiXmlDocument.h – libreparser
+// UiXmlDocument.h - libreparser
 // Reads a "window" document (see ui/ui.dtd), builds a generic element tree,
 // and validates it against the ui.dtd grammar for debugging purposes.
 

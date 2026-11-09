@@ -30,7 +30,7 @@ BuildConfigDialog::BuildConfigDialog(const BuildConfigurations &configs, QWidget
     auto *btnClone  = new QPushButton(tr("Clone"), this);
     m_btnRemove     = new QPushButton(tr("Remove"), this);
     m_btnActive     = new QPushButton(tr("Make Active"), this);
-    auto *btnReset  = new QPushButton(tr("Reset to Detected…"), this);
+    auto *btnReset  = new QPushButton(tr("Reset to Detected..."), this);
     btnReset->setToolTip(tr("Replace all configurations with the defaults detected "
                             "from the project's files"));
 
@@ -263,7 +263,8 @@ void BuildConfigDialog::resetToDetected()
             tr("Replace all configurations with the defaults detected from the "
                "project's files?")) != QMessageBox::Yes)
         return;
-    m_configs = BuildConfigurations::detect(m_source.projectDir(), m_source.projectName());
+    m_configs = BuildConfigurations::detect(m_source.projectDir(), m_source.projectName(),
+                                           nullptr, m_source.language());
     m_active  = 0;
     m_current = -1;
     populateList();

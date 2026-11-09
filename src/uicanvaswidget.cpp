@@ -1,4 +1,4 @@
-// uicanvaswidget.cpp – KayteIDE
+// uicanvaswidget.cpp - KayteIDE
 #include "uicanvaswidget.h"
 
 #include <QPainter>
@@ -16,12 +16,17 @@
 #include <QFile>
 #include <QDebug>
 
+#include "InFormTypes.hpp"
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 static QSize defaultSizeForType(const QString &t)
 {
+    if (InForm::isPaletteKey(t))
+        return InForm::typeInfo(InForm::typeFromPaletteKey(t)).defaultSize;
+
     static const QMap<QString,QSize> tbl = {
         {QStringLiteral("QPushButton"),      {  96, 28}},
         {QStringLiteral("QToolButton"),      {  28, 28}},
@@ -80,6 +85,7 @@ static QSize defaultSizeForType(const QString &t)
 
 static QColor accentFor(const QString &t)
 {
+    if (InForm::isPaletteKey(t))                                  return {  0,150,136};
     if (t.contains(QLatin1String("Button")))                      return {100,149,237};
     if (t.contains(QLatin1String("Edit"))  ||
         t.contains(QLatin1String("Spin"))  ||
@@ -157,6 +163,32 @@ void UiCanvasWidget::applyItemEdits(int index, const QString &objectName,
     update();
     emit canvasModified();
     emit itemSelectionChanged(&m_items[index]);
+}
+
+void UiCanvasWidget::setItems(const QList<CanvasItem> &items)
+{
+    m_items = items;
+    for (CanvasItem &ci : m_items) ci.selected = false;
+    m_selectedIndex = -1;
+    m_undoStack->clear();
+    update();
+    emit canvasModified();
+    emit itemSelectionChanged(nullptr);
+}
+
+void UiCanvasWidget::replaceItems(const QList<CanvasItem> &items)
+{
+    const QString selectedName = m_selectedIndex >= 0 && m_selectedIndex < m_items.size()
+                                     ? m_items[m_selectedIndex].objectName : QString();
+    m_items = items;
+    m_selectedIndex = -1;
+    for (int i = 0; i < m_items.size(); ++i) {
+        m_items[i].selected = !selectedName.isEmpty() && m_items[i].objectName == selectedName;
+        if (m_items[i].selected) m_selectedIndex = i;
+    }
+    update();
+    emit canvasModified();
+    emit itemSelectionChanged(m_selectedIndex >= 0 ? &m_items[m_selectedIndex] : nullptr);
 }
 
 void UiCanvasWidget::clearCanvas()
@@ -287,17 +319,37 @@ void UiCanvasWidget::dropEvent(QDropEvent *e)
         e->mimeData()->data(QStringLiteral("application/x-kayteide-widget")));
     if (type.isEmpty()) return;
 
-    QPoint pos = e->position().toPoint();
+    addWidget(type, e->position().toPoint());
+    e->acceptProposedAction();
+}
+
+void UiCanvasWidget::addWidget(const QString &type, QPoint pos)
+{
+    if (type.isEmpty()) return;
+    const QSize size = defaultSizeForType(type);
+    if (pos.x() < 0 || pos.y() < 0) {
+        // Next free spot: walk down (then across) the canvas until nothing overlaps.
+        pos = QPoint(GRID * 2, GRID * 2);
+        for (int tries = 0; tries < 200; ++tries) {
+            bool overlaps = false;
+            for (const CanvasItem &ci : m_items)
+                if (ci.geometry.intersects(QRect(pos, size))) { overlaps = true; break; }
+            if (!overlaps) break;
+            pos.ry() += GRID * 4;
+            if (pos.y() + size.height() > height()) pos = QPoint(pos.x() + GRID * 20, GRID * 2);
+        }
+    }
     snapToGrid(pos);
 
     CanvasItem item;
     item.widgetType = type;
     item.objectName = uniqueName(type);
     item.labelText  = defaultLabel(type);
-    item.geometry   = QRect(pos, defaultSizeForType(type));
+    item.geometry   = QRect(pos, size);
+    if (InForm::isPaletteKey(type))
+        item.properties = InForm::defaultProperties(InForm::typeFromPaletteKey(type));
 
     m_undoStack->push(new AddItemCmd(this, item));
-    e->acceptProposedAction();
 }
 
 // ── Mouse ─────────────────────────────────────────────────────────────────────
@@ -311,6 +363,9 @@ void UiCanvasWidget::mousePressEvent(QMouseEvent *e)
         m_dragOffset    = e->pos() - m_items[hit].geometry.topLeft();
         m_moveStartPos  = m_items[hit].geometry.topLeft();
         m_draggingItem  = true;
+        m_dragChildren  = containedItems(hit);
+        m_dragChildStart.clear();
+        for (int c : m_dragChildren) m_dragChildStart << m_items[c].geometry.topLeft();
     }
     update();
 }
@@ -323,6 +378,9 @@ void UiCanvasWidget::mouseMoveEvent(QMouseEvent *e)
     snapToGrid(tl);
     tl.setX(qMax(0, tl.x())); tl.setY(qMax(0, tl.y()));
     m_items[m_selectedIndex].geometry.moveTopLeft(tl);
+    const QPoint delta = tl - m_moveStartPos;
+    for (int i = 0; i < m_dragChildren.size(); ++i)
+        m_items[m_dragChildren[i]].geometry.moveTopLeft(m_dragChildStart[i] + delta);
     update();
 }
 
@@ -330,10 +388,27 @@ void UiCanvasWidget::mouseReleaseEvent(QMouseEvent *e)
 {
     if (e->button() == Qt::LeftButton && m_draggingItem && m_selectedIndex >= 0) {
         const QPoint newPos = m_items[m_selectedIndex].geometry.topLeft();
-        if (newPos != m_moveStartPos)
-            m_undoStack->push(new MoveItemCmd(this, m_selectedIndex,
-                                              m_moveStartPos, newPos));
+        if (newPos != m_moveStartPos) {
+            const QPoint delta = newPos - m_moveStartPos;
+            m_undoStack->beginMacro(m_dragChildren.isEmpty() ? tr("Move widget") : tr("Move container"));
+            m_undoStack->push(new MoveItemCmd(this, m_selectedIndex, m_moveStartPos, newPos));
+            for (int i = 0; i < m_dragChildren.size(); ++i)
+                m_undoStack->push(new MoveItemCmd(this, m_dragChildren[i],
+                                                  m_dragChildStart[i], m_dragChildStart[i] + delta));
+            m_undoStack->endMacro();
+        }
+        // A control dragged out of its frame no longer belongs to it.
+        CanvasItem &moved = m_items[m_selectedIndex];
+        if (newPos != m_moveStartPos && !moved.parentName.isEmpty()) {
+            bool stillInside = false;
+            for (const CanvasItem &ci : m_items)
+                if (ci.objectName == moved.parentName)
+                    stillInside = ci.geometry.contains(moved.geometry.center());
+            if (!stillInside) { moved.parentName.clear(); emit canvasModified(); }
+        }
         m_draggingItem = false;
+        m_dragChildren.clear();
+        m_dragChildStart.clear();
     }
 }
 
@@ -355,9 +430,7 @@ void UiCanvasWidget::keyPressEvent(QKeyEvent *e)
         case Qt::Key_Down:  d = {  0,    step}; break;
         default: QWidget::keyPressEvent(e); return;
     }
-    m_items[m_selectedIndex].geometry.translate(d);
-    update();
-    emit canvasModified();
+    moveWithContents(m_selectedIndex, m_items[m_selectedIndex].geometry.topLeft() + d);
 }
 
 void UiCanvasWidget::contextMenuEvent(QContextMenuEvent *e)
@@ -389,6 +462,46 @@ int UiCanvasWidget::itemAt(const QPoint &pos) const
     return -1;
 }
 
+bool UiCanvasWidget::isContainer(int index) const
+{
+    const QString &t = m_items[index].widgetType;
+    return t == QLatin1String("InForm::Frame") || t == QLatin1String("QGroupBox") ||
+           t == QLatin1String("QFrame");
+}
+
+QList<int> UiCanvasWidget::containedItems(int index) const
+{
+    QList<int> out;
+    if (index < 0 || index >= m_items.size() || !isContainer(index)) return out;
+    const CanvasItem &box = m_items[index];
+    for (int i = 0; i < m_items.size(); ++i) {
+        if (i == index) continue;
+        const CanvasItem &ci = m_items[i];
+        // Imported InForm children name their frame; anything else counts
+        // when it lies wholly inside the container.
+        if ((!ci.parentName.isEmpty() && ci.parentName == box.objectName) ||
+            (ci.parentName.isEmpty() && box.geometry.contains(ci.geometry)))
+            out << i;
+    }
+    return out;
+}
+
+void UiCanvasWidget::moveWithContents(int index, QPoint newTopLeft)
+{
+    if (index < 0 || index >= m_items.size()) return;
+    const QPoint from = m_items[index].geometry.topLeft();
+    const QPoint delta = newTopLeft - from;
+    if (delta.isNull()) return;
+    const QList<int> children = containedItems(index);
+    m_undoStack->beginMacro(children.isEmpty() ? tr("Move widget") : tr("Move container"));
+    m_undoStack->push(new MoveItemCmd(this, index, from, newTopLeft));
+    for (int c : children) {
+        const QPoint tl = m_items[c].geometry.topLeft();
+        m_undoStack->push(new MoveItemCmd(this, c, tl, tl + delta));
+    }
+    m_undoStack->endMacro();
+}
+
 void UiCanvasWidget::selectItem(int index)
 {
     if (m_selectedIndex >= 0 && m_selectedIndex < m_items.size())
@@ -413,6 +526,18 @@ void UiCanvasWidget::snapToGrid(QPoint &pt) const
 
 QString UiCanvasWidget::uniqueName(const QString &type) const
 {
+    // InForm names controls "Button1", "Label2", ...
+    if (InForm::isPaletteKey(type)) {
+        const QString base = QLatin1String(InForm::typeInfo(InForm::typeFromPaletteKey(type)).name);
+        for (int n = 1; ; ++n) {
+            const QString cand = base + QString::number(n);
+            bool used = false;
+            for (const CanvasItem &ci : m_items)
+                if (ci.objectName.compare(cand, Qt::CaseInsensitive) == 0) { used = true; break; }
+            if (!used) return cand;
+        }
+    }
+
     QString base = type.startsWith(QLatin1Char('Q')) ? type.mid(1) : type;
     base[0] = base[0].toLower();
     for (int n = 1; ; ++n) {
@@ -425,6 +550,21 @@ QString UiCanvasWidget::uniqueName(const QString &type) const
 
 QString UiCanvasWidget::defaultLabel(const QString &type) const
 {
+    if (InForm::isPaletteKey(type)) {
+        switch (InForm::typeFromPaletteKey(type)) {
+        case InForm::ControlType::TextBox:
+        case InForm::ControlType::ListBox:
+        case InForm::ControlType::DropdownList:
+        case InForm::ControlType::TrackBar:
+        case InForm::ControlType::ProgressBar:
+        case InForm::ControlType::PictureBox:
+        case InForm::ControlType::ToggleSwitch:
+        case InForm::ControlType::ContextMenu:
+            return {};
+        default:
+            return uniqueName(type); // InForm captions a new control with its name
+        }
+    }
     static const QMap<QString,QString> lbl = {
         {QStringLiteral("QPushButton"),   QStringLiteral("Push Button")},
         {QStringLiteral("QLabel"),        QStringLiteral("Label")},
@@ -453,8 +593,19 @@ bool UiCanvasWidget::exportUiFile(const QString &filePath) const
         qWarning() << "[UiCanvas] Cannot write:" << filePath;
         return false;
     }
+    return file.write(toUiXml().toUtf8()) >= 0;
+}
 
-    QXmlStreamWriter xml(&file);
+QString UiCanvasWidget::qtClassOf(const CanvasItem &ci)
+{
+    if (!InForm::isPaletteKey(ci.widgetType)) return ci.widgetType;
+    return QString::fromLatin1(InForm::typeInfo(InForm::typeFromPaletteKey(ci.widgetType)).qtClass);
+}
+
+QString UiCanvasWidget::toUiXml() const
+{
+    QByteArray buffer;
+    QXmlStreamWriter xml(&buffer);
     xml.setAutoFormatting(true);
     xml.setAutoFormattingIndent(1);
     xml.writeStartDocument();
@@ -489,7 +640,7 @@ bool UiCanvasWidget::exportUiFile(const QString &filePath) const
     };
     writeString("windowTitle", QStringLiteral("Form"));
 
-    // Child widgets (skip layout placeholders – they're parent-level concepts)
+    // Child widgets (skip layout placeholders - they're parent-level concepts)
     const QStringList layoutTypes = {
         QStringLiteral("QVBoxLayout"), QStringLiteral("QHBoxLayout"),
         QStringLiteral("QGridLayout"), QStringLiteral("QFormLayout"),
@@ -504,30 +655,49 @@ bool UiCanvasWidget::exportUiFile(const QString &filePath) const
         QStringLiteral("QGroupBox"),
     };
 
+    // InForm controls export as their closest Qt class; menu entries have no
+    // widget equivalent and are left out.
+    const auto exported = [&](const CanvasItem &ci) {
+        const QString cls = qtClassOf(ci);
+        return !cls.isEmpty() && !layoutTypes.contains(cls);
+    };
+
     for (const CanvasItem &ci : m_items) {
-        if (layoutTypes.contains(ci.widgetType)) continue;
+        if (!exported(ci)) continue;
+        const QString cls = qtClassOf(ci);
 
         xml.writeStartElement(QStringLiteral("widget"));
-        xml.writeAttribute(QStringLiteral("class"), ci.widgetType);
+        xml.writeAttribute(QStringLiteral("class"), cls);
         xml.writeAttribute(QStringLiteral("name"),  ci.objectName);
 
         writeRect("geometry",
                   ci.geometry.x(), ci.geometry.y(),
                   ci.geometry.width(), ci.geometry.height());
 
-        if (textWidgets.contains(ci.widgetType))
+        if (cls == QLatin1String("QGroupBox"))
+            writeString("title", ci.labelText);   // QGroupBox has no "text"
+        else if (cls == QLatin1String("QLineEdit") && InForm::isPaletteKey(ci.widgetType))
+            writeString("placeholderText", ci.labelText);
+        else if (textWidgets.contains(cls))
             writeString("text", ci.labelText);
+
+        if (cls == QLatin1String("QSlider")) {
+            xml.writeStartElement(QStringLiteral("property"));
+            xml.writeAttribute(QStringLiteral("name"), QStringLiteral("orientation"));
+            xml.writeTextElement(QStringLiteral("enum"), QStringLiteral("Qt::Horizontal"));
+            xml.writeEndElement();
+        }
 
         xml.writeEndElement(); // widget
     }
 
     xml.writeEndElement(); // root widget
 
-    // tabstops (optional – generated for all non-layout items)
+    // tabstops (optional - generated for all non-layout items)
     if (!m_items.isEmpty()) {
         xml.writeStartElement(QStringLiteral("tabstops"));
         for (const CanvasItem &ci : m_items) {
-            if (!layoutTypes.contains(ci.widgetType))
+            if (exported(ci))
                 xml.writeTextElement(QStringLiteral("tabstop"), ci.objectName);
         }
         xml.writeEndElement();
@@ -540,5 +710,5 @@ bool UiCanvasWidget::exportUiFile(const QString &filePath) const
 
     xml.writeEndElement(); // ui
     xml.writeEndDocument();
-    return true;
+    return QString::fromUtf8(buffer);
 }

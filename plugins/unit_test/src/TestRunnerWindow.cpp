@@ -95,7 +95,7 @@ void TestRunnerWindow::buildUi()
     root->setContentsMargins(0, 0, 0, 0);
 
     // ════════════════════════════════════════════════════════════════════════
-    // LEFT PANEL — file list + controls
+    // LEFT PANEL - file list + controls
     // ════════════════════════════════════════════════════════════════════════
     auto *leftPanel = new QWidget(this);
     leftPanel->setObjectName("leftPanel");
@@ -134,7 +134,7 @@ void TestRunnerWindow::buildUi()
     auto *filterLbl = new QLabel("Filter results:", leftPanel);
     filterLbl->setObjectName("sectionLabel");
     m_filterEdit = new QLineEdit(leftPanel);
-    m_filterEdit->setPlaceholderText("Search…");
+    m_filterEdit->setPlaceholderText("Search...");
 
     leftLayout->addWidget(panelTitle);
     leftLayout->addWidget(m_fileList, 1);
@@ -147,7 +147,7 @@ void TestRunnerWindow::buildUi()
     leftLayout->addWidget(m_filterEdit);
 
     // ════════════════════════════════════════════════════════════════════════
-    // RIGHT PANEL — tabs (Results / Source / Log) + summary
+    // RIGHT PANEL - tabs (Results / Source / Log) + summary
     // ════════════════════════════════════════════════════════════════════════
     auto *rightPanel = new QWidget(this);
     auto *rightLayout = new QVBoxLayout(rightPanel);
@@ -168,7 +168,7 @@ void TestRunnerWindow::buildUi()
     m_tabs = new QTabWidget(rightPanel);
     m_tabs->setObjectName("mainTabs");
 
-    // — Results tab —
+    // - Results tab -
     m_tree = new QTreeWidget(m_tabs);
     m_tree->setColumnCount(4);
     m_tree->setHeaderLabels({"File / Test", "Lang", "Result", "Message"});
@@ -183,20 +183,20 @@ void TestRunnerWindow::buildUi()
     m_tree->setAnimated(true);
     m_tabs->addTab(m_tree, "📊  Results");
 
-    // — Source tab —
+    // - Source tab -
     m_srcView = new QPlainTextEdit(m_tabs);
     m_srcView->setObjectName("srcView");
     m_srcView->setReadOnly(true);
-    m_srcView->setPlaceholderText("Select a file from the list to view its source…");
+    m_srcView->setPlaceholderText("Select a file from the list to view its source...");
     m_srcView->setLineWrapMode(QPlainTextEdit::NoWrap);
     m_highlighter = new SyntaxHighlighter(m_srcView->document());
     m_tabs->addTab(m_srcView, "📄  Source");
 
-    // — Log tab —
+    // - Log tab -
     m_logView = new QTextEdit(m_tabs);
     m_logView->setObjectName("logView");
     m_logView->setReadOnly(true);
-    m_logView->setPlaceholderText("Raw output appears here during test runs…");
+    m_logView->setPlaceholderText("Raw output appears here during test runs...");
     m_tabs->addTab(m_logView, "📋  Log");
 
     rightLayout->addWidget(m_progress);
@@ -206,7 +206,7 @@ void TestRunnerWindow::buildUi()
     root->addWidget(leftPanel);
     root->addWidget(rightPanel, 1);
 
-    statusBar()->showMessage("Ready — add files and press Run All.");
+    statusBar()->showMessage("Ready - add files and press Run All.");
 
     // ── Connections ──────────────────────────────────────────────────────────
     connect(m_addBtn,    &QPushButton::clicked, this, &TestRunnerWindow::onAddFile);
@@ -422,7 +422,7 @@ void TestRunnerWindow::onRun()
     else
         m_multiProc->run(first);
 
-    statusBar()->showMessage(QString("Running %1 file(s)…").arg(m_filesTotal));
+    statusBar()->showMessage(QString("Running %1 file(s)...").arg(m_filesTotal));
 }
 
 void TestRunnerWindow::onStop()
@@ -504,13 +504,13 @@ void TestRunnerWindow::onFinished(int exitCode)
     const bool allGood = (m_failed == 0 && m_total > 0);
     m_summaryLbl->setText(allGood
         ? QString("✓ All %1 checks passed across %2 file(s)").arg(m_total).arg(m_filesTotal)
-        : QString("✗ %1 failed  ✓ %2 passed  ↷ %3 skipped  — %4 file(s)")
+        : QString("✗ %1 failed  ✓ %2 passed  ↷ %3 skipped  - %4 file(s)")
               .arg(m_failed).arg(m_passed).arg(m_skipped).arg(m_filesTotal));
     m_summaryLbl->setStyleSheet(allGood
         ? "color:#a6e3a1; font-weight:bold;"
         : "color:#f38ba8; font-weight:bold;");
 
-    statusBar()->showMessage(QString("Done (exit %1) — %2 passed / %3 failed / %4 skipped")
+    statusBar()->showMessage(QString("Done (exit %1) - %2 passed / %3 failed / %4 skipped")
         .arg(exitCode).arg(m_passed).arg(m_failed).arg(m_skipped));
 }
 
@@ -566,7 +566,7 @@ void TestRunnerWindow::resetResults()
     m_suiteItems.clear();
     m_total = m_passed = m_failed = m_skipped = 0;
     m_filesDone = m_filesTotal = 0;
-    m_summaryLbl->setText("Running…");
+    m_summaryLbl->setText("Running...");
     m_summaryLbl->setStyleSheet("color:#89b4fa;");
     m_progress->setRange(0, 1);
     m_progress->setValue(0);
@@ -592,7 +592,7 @@ void TestRunnerWindow::loadSourceFile(const QString &path)
 
     const LanguageRunner lr = LanguageRunner::fromFile(path);
     statusBar()->showMessage(
-        QString("%1  [%2]  —  %3 lines")
+        QString("%1  [%2]  -  %3 lines")
             .arg(QFileInfo(path).fileName(), lr.language)
             .arg(m_srcView->document()->lineCount()));
 }

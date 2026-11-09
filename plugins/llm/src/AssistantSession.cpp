@@ -85,7 +85,7 @@ AssistantSession AssistantSession::create(const QString &projectRoot, const QStr
     s.model       = model;
     s.created     = s.updated = QDateTime::currentDateTime();
 
-    // Hash of (time, project, random) → short, stable, unique id.
+    // Hash of (time, project, random) -> short, stable, unique id.
     QCryptographicHash h(QCryptographicHash::Sha256);
     h.addData(s.created.toString(Qt::ISODateWithMs).toUtf8());
     h.addData(projectRoot.toUtf8());
@@ -146,7 +146,7 @@ QString AssistantSession::title() const
     for (const ChatMessage &m : messages) {
         if (m.role != QLatin1String("user")) continue;
         QString t = m.content.simplified();
-        if (t.size() > 60) t = t.left(57) + QStringLiteral("…");
+        if (t.size() > 60) t = t.left(57) + QStringLiteral("...");
         return t;
     }
     return QObject::tr("(empty)");

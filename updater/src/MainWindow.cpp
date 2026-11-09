@@ -11,6 +11,8 @@
 #include <QMessageBox>
 #include <QDateTime>
 #include <QSettings>
+#include <QCoreApplication>
+#include <QFileInfo>
 #include <QApplication>
 #include <QDir>
 #include <QIcon>
@@ -27,12 +29,15 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_checker = new UpdateChecker(this);
     m_builder = new BuildManager(this);
+    m_installer = new AppInstaller(this);
 
     setupUi();
     setupTray();
     applyStyleSheet();
 
-    // Restore settings
+    // Restore settings. Each setter fires onSettingsChanged(), which would save
+    // the half-filled form over the stored values - so hold off until done.
+    m_loadingSettings = true;
     QSettings s("ringsce", "KayteIDEUpdater");
     m_sourceDirEdit->setText(s.value("sourceDir",
         QDir::homePath() + "/kayteide-src").toString());
@@ -44,6 +49,9 @@ MainWindow::MainWindow(QWidget *parent)
     m_intervalSpin->setValue(s.value("interval", 30).toInt());
     m_autoCheckBox->setChecked(s.value("autoCheck", true).toBool());
     m_installChk->setChecked(s.value("runInstall", false).toBool());
+    m_appEdit->setText(s.value("installedApp", defaultInstalledApp()).toString());
+    m_autoUpdateChk->setChecked(s.value("autoUpdate", true).toBool());
+    m_loadingSettings = false;
 
     onSettingsChanged(); // push settings into objects
 
@@ -60,10 +68,27 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_builder, &BuildManager::logLine,        m_log, &LogWidget::appendLog);
     connect(m_builder, &BuildManager::progressChanged,m_progressBar, &QProgressBar::setValue);
 
+    // Installer signals: close KayteIDE, swap in the new build, reopen it
+    connect(m_installer, &AppInstaller::logLine, m_log, &LogWidget::appendLog);
+    connect(m_installer, &AppInstaller::postponed, this, [this](const QString &msg) {
+        setStatus("⏸ " + msg, "#d29922");
+        m_log->appendLog(msg, true);
+        m_installBtn->setEnabled(true);
+    });
+    connect(m_installer, &AppInstaller::finished, this, [this](bool ok, const QString &msg) {
+        setStatus((ok ? "✔ " : "✘ ") + msg, ok ? "#3fb950" : "#f85149");
+        m_log->appendLog(msg, !ok);
+        m_installBtn->setEnabled(!ok);
+        if (ok) {
+            m_checker->setCurrentSha(AppInstaller::installedCommit(installedApp()));
+            m_tray->showMessage("KayteIDE Updated", msg, QSystemTrayIcon::Information, 5000);
+        }
+    });
+
     if (m_autoCheckBox->isChecked())
         m_checker->startAutoCheck();
 
-    setStatus("Ready — idle.", "#8b949e");
+    setStatus("Ready - idle.", "#8b949e");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -101,8 +126,8 @@ void MainWindow::setupUi()
     auto *statusGrid  = new QGridLayout(statusGroup);
 
     m_statusLabel    = new QLabel("Idle");
-    m_commitLabel    = new QLabel("–");
-    m_lastCheckLabel = new QLabel("–");
+    m_commitLabel    = new QLabel("-");
+    m_lastCheckLabel = new QLabel("-");
     m_progressBar    = new QProgressBar;
     m_progressBar->setRange(0, 100);
     m_progressBar->setValue(0);
@@ -125,12 +150,16 @@ void MainWindow::setupUi()
     m_checkBtn = new QPushButton("🔍  Check Now");
     m_buildBtn = new QPushButton("🔨  Pull & Build");
     m_abortBtn = new QPushButton("⛔  Abort");
+    m_installBtn = new QPushButton("⬇  Install Now");
+    m_installBtn->setToolTip("Close KayteIDE, install the last build (keeping its toolchain) and reopen it");
+    m_installBtn->setEnabled(false);
     m_buildBtn->setObjectName("buildBtn");
     m_abortBtn->setObjectName("abortBtn");
     m_abortBtn->setEnabled(false);
 
     btnRow->addWidget(m_checkBtn);
     btnRow->addWidget(m_buildBtn);
+    btnRow->addWidget(m_installBtn);
     btnRow->addStretch();
     btnRow->addWidget(m_abortBtn);
     rootLayout->addLayout(btnRow);
@@ -138,6 +167,7 @@ void MainWindow::setupUi()
     connect(m_checkBtn, &QPushButton::clicked, this, &MainWindow::onCheckNowClicked);
     connect(m_buildBtn, &QPushButton::clicked, this, &MainWindow::onBuildClicked);
     connect(m_abortBtn, &QPushButton::clicked, this, &MainWindow::onAbortClicked);
+    connect(m_installBtn, &QPushButton::clicked, this, &MainWindow::onInstallClicked);
 
     // ── Splitter: settings | log ──────────────────────────────────────────────
     auto *splitter = new QSplitter(Qt::Horizontal);
@@ -156,6 +186,11 @@ void MainWindow::setupUi()
     m_intervalSpin   = new QSpinBox;
     m_autoCheckBox   = new QCheckBox("Enable auto-check");
     m_installChk     = new QCheckBox("Run cmake --install");
+    m_appEdit        = new QLineEdit;
+    m_appEdit->setToolTip("The KayteIDE.app to update (closed, replaced and reopened)");
+    m_autoUpdateChk  = new QCheckBox("Build && install new commits automatically");
+    m_autoUpdateChk->setToolTip("When a new commit lands on main: build it, close KayteIDE, "
+                                "install the build and reopen KayteIDE");
 
     m_jobsSpin->setRange(1, 32);
     m_intervalSpin->setRange(1, 1440);
@@ -165,7 +200,7 @@ void MainWindow::setupUi()
         auto *w = new QWidget;
         auto *h = new QHBoxLayout(w);
         h->setContentsMargins(0,0,0,0);
-        auto *btn = new QPushButton("…");
+        auto *btn = new QPushButton("...");
         btn->setFixedWidth(28);
         h->addWidget(edit);
         h->addWidget(btn);
@@ -184,6 +219,24 @@ void MainWindow::setupUi()
     form->addRow("Check interval:", m_intervalSpin);
     form->addRow(m_autoCheckBox);
     form->addRow(m_installChk);
+    {
+        auto *w = new QWidget;
+        auto *h = new QHBoxLayout(w);
+        h->setContentsMargins(0,0,0,0);
+        auto *btn = new QPushButton("...");
+        btn->setFixedWidth(28);
+        h->addWidget(m_appEdit);
+        h->addWidget(btn);
+        connect(btn, &QPushButton::clicked, this, [this] {
+            const QString app = QFileDialog::getOpenFileName(this, "Select KayteIDE.app",
+                QFileInfo(installedApp()).absolutePath(), "Applications (*.app)");
+            if (!app.isEmpty()) { m_appEdit->setText(app); onSettingsChanged(); }
+        });
+        form->addRow("KayteIDE app:", w);
+    }
+    form->addRow(m_autoUpdateChk);
+    connect(m_appEdit, &QLineEdit::editingFinished, this, &MainWindow::onSettingsChanged);
+    connect(m_autoUpdateChk, &QCheckBox::toggled, this, &MainWindow::onSettingsChanged);
 
     connect(m_sourceDirEdit,  &QLineEdit::editingFinished, this, &MainWindow::onSettingsChanged);
     connect(m_buildDirEdit,   &QLineEdit::editingFinished, this, &MainWindow::onSettingsChanged);
@@ -336,14 +389,16 @@ void MainWindow::applyStyleSheet()
 // ─────────────────────────────────────────────────────────────────────────────
 void MainWindow::onCheckStarted()
 {
-    setStatus("Checking for updates…", "#79c0ff");
+    // Compare GitHub's latest commit with the one the installed app was built from.
+    m_checker->setCurrentSha(AppInstaller::installedCommit(installedApp()));
+    setStatus("Checking for updates...", "#79c0ff");
     m_lastCheckLabel->setText(QDateTime::currentDateTime().toString("hh:mm:ss dd/MM/yyyy"));
 }
 
 void MainWindow::onUpdateAvailable(const CommitInfo &commit)
 {
     m_updatePending = true;
-    const QString msg = QString("%1 — %2 (%3)")
+    const QString msg = QString("%1 - %2 (%3)")
         .arg(commit.shortSha, commit.message, commit.author);
     m_commitLabel->setText(msg);
     setStatus("⬆ Update available!", "#3fb950");
@@ -357,6 +412,14 @@ void MainWindow::onUpdateAvailable(const CommitInfo &commit)
     m_log->appendLog(QString("Author: %1  (%2)").arg(commit.author,
         commit.timestamp.toString(Qt::ISODate)));
     m_log->appendLog(QString("URL: %1").arg(commit.url));
+
+    // Build it (once per commit); onBuildSucceeded installs it.
+    if (m_autoUpdateChk->isChecked() && !m_builder->isRunning() && !m_installer->isBusy()
+        && commit.sha != m_buildingSha) {
+        m_buildingSha = commit.sha;
+        m_log->appendLog("Building the new commit automatically...");
+        onBuildClicked();
+    }
 }
 
 void MainWindow::onAlreadyUpToDate()
@@ -391,13 +454,51 @@ void MainWindow::onBuildSucceeded()
     m_progressBar->setValue(100);
     m_updatePending = false;
 
-    m_tray->showMessage("KayteIDE Updated",
-        "Build succeeded! KayteIDE has been rebuilt.",
+#ifdef Q_OS_MACOS
+    m_installBtn->setEnabled(true);
+    if (m_autoUpdateChk->isChecked()) {
+        m_log->appendSection("Installing the new build...");
+        onInstallClicked();
+        return;
+    }
+#endif
+    m_tray->showMessage("KayteIDE Built",
+        "Build succeeded! Use Install Now to replace KayteIDE with it.",
         QSystemTrayIcon::Information, 5000);
+}
+
+void MainWindow::onInstallClicked()
+{
+#ifdef Q_OS_MACOS
+    m_installBtn->setEnabled(false);
+    setStatus("Installing - closing KayteIDE...", "#79c0ff");
+    m_installer->install(m_builder->builtApp(), installedApp());
+#else
+    m_log->appendLog("Installing the app bundle is only supported on macOS; "
+                     "use \"Run cmake --install\" instead.", true);
+#endif
+}
+
+// The KayteIDE.app this updater lives in (Contents/MacOS/KayteIDEUpdater),
+// else /Applications/KayteIDE.app.
+QString MainWindow::defaultInstalledApp()
+{
+    QDir dir(QCoreApplication::applicationDirPath());          // .../Contents/MacOS
+    if (dir.cdUp() && dir.cdUp() && dir.dirName().endsWith(".app")
+        && QFileInfo::exists(dir.filePath("Contents/MacOS/KayteIDE")))
+        return dir.absolutePath();
+    return "/Applications/KayteIDE.app";
+}
+
+QString MainWindow::installedApp() const
+{
+    const QString app = m_appEdit->text().trimmed();
+    return app.isEmpty() ? defaultInstalledApp() : QDir::cleanPath(app);
 }
 
 void MainWindow::onBuildFailed(const QString &reason)
 {
+    m_buildingSha.clear();   // let the next check try this commit again
     setStatus("✘ Build failed: " + reason, "#f85149");
     m_log->appendLog("✘ Build failed: " + reason, true);
     setControlsEnabled(true);
@@ -414,7 +515,7 @@ void MainWindow::onCheckNowClicked()
 
 void MainWindow::onBuildClicked()
 {
-    m_log->appendSection("Starting full build pipeline…");
+    m_log->appendSection("Starting full build pipeline...");
     setControlsEnabled(false);
     m_abortBtn->setEnabled(true);
     m_progressBar->setValue(0);
@@ -431,12 +532,14 @@ void MainWindow::onAbortClicked()
 
 void MainWindow::onSettingsChanged()
 {
+    if (m_loadingSettings) return;
     m_builder->setSourceDir(m_sourceDirEdit->text());
     m_builder->setBuildDir(m_buildDirEdit->text());
     m_builder->setInstallDir(m_installDirEdit->text());
     m_builder->setMakeJobs(m_jobsSpin->value());
     m_builder->setRunInstall(m_installChk->isChecked());
     m_checker->setCheckInterval(m_intervalSpin->value());
+    m_checker->setCurrentSha(AppInstaller::installedCommit(installedApp()));
 
     if (m_autoCheckBox->isChecked())
         m_checker->startAutoCheck();
@@ -452,6 +555,8 @@ void MainWindow::onSettingsChanged()
     s.setValue("interval",   m_intervalSpin->value());
     s.setValue("autoCheck",  m_autoCheckBox->isChecked());
     s.setValue("runInstall", m_installChk->isChecked());
+    s.setValue("installedApp", m_appEdit->text());
+    s.setValue("autoUpdate", m_autoUpdateChk->isChecked());
 }
 
 void MainWindow::onTrayActivated(QSystemTrayIcon::ActivationReason reason)

@@ -11,12 +11,14 @@ add_library(KayteLlmAssistant STATIC
         src/AssistantPanel.cpp
         src/CliAgentClient.cpp
         src/LlmLog.cpp
+        src/FileEdits.cpp
         include/OllamaClient.hpp
         include/CodeIndex.hpp
         include/AssistantSession.hpp
         include/AssistantPanel.hpp
         include/CliAgentClient.hpp
         include/LlmLog.hpp
+        include/FileEdits.hpp
 )
 
 set_target_properties(KayteLlmAssistant PROPERTIES AUTOMOC ON)

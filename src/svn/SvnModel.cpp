@@ -1,4 +1,4 @@
-// SvnModel.cpp – KaytEIDE SVN item model
+// SvnModel.cpp - KaytEIDE SVN item model
 // C++17, Qt 6
 
 #include "SvnModel.h"

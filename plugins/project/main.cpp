@@ -10,11 +10,11 @@ int main(int argc, char *argv[])
 {
 #ifdef KAYTE_GTK4_ENABLED
     // Explicit opt-in: `project_dialog --gtk4` runs the GTK4 "New Project"
-    // dialog instead of the default Qt6 one below — same idea (collect a
+    // dialog instead of the default Qt6 one below - same idea (collect a
     // project name and type, report accept/cancel) implemented with GTK4.
     // Only reachable on builds where GTK4 was actually found
     // (KAYTE_GTK4_ENABLED is set by CMake on Linux / macOS when pkg-config
-    // locates gtk4 — see plugins/project/CMakeLists.txt), so the flag simply
+    // locates gtk4 - see plugins/project/CMakeLists.txt), so the flag simply
     // doesn't exist on builds without it.
     if (argc > 1 && std::strcmp(argv[1], "--gtk4") == 0) {
         std::cout << "Dynamic check: GTK4 environment detected!" << std::endl;

@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# QTest suites (compiled Qt unit tests — run via the GUI or CTest)
+# QTest suites (compiled Qt unit tests - run via the GUI or CTest)
 # ─────────────────────────────────────────────────────────────────────────────
 macro(add_qt_test TARGET)
     qt6_add_executable(${TARGET} ${ARGN})

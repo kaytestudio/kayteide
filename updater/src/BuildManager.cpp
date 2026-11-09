@@ -7,6 +7,10 @@ BuildManager::BuildManager(QObject *parent)
     : QObject(parent)
 {
     m_process = new QProcess(this);
+    // git / cmake from Homebrew aren't on a GUI app's PATH.
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert("PATH", "/opt/homebrew/bin:/usr/local/bin:" + env.value("PATH", "/usr/bin:/bin"));
+    m_process->setProcessEnvironment(env);
 
     connect(m_process, &QProcess::readyReadStandardOutput, this, &BuildManager::onStdOut);
     connect(m_process, &QProcess::readyReadStandardError,  this, &BuildManager::onStdErr);
@@ -34,7 +38,7 @@ bool BuildManager::repoExists() const
 void BuildManager::startBuild()
 {
     if (isRunning()) {
-        emit logLine("Build already in progress — aborting previous build first.", true);
+        emit logLine("Build already in progress - aborting previous build first.", true);
         abort();
         return;
     }
@@ -62,8 +66,10 @@ void BuildManager::advancePipeline()
     case 0:
         // Clone or pull
         if (repoExists()) {
+            // The updater owns this checkout: make it exactly origin/main
+            // (works for the shallow clone below; local edits are discarded).
             runStep(BuildStep::Pulling,
-                    "git", {"pull", "--rebase", "--autostash"},
+                    "/bin/sh", {"-c", "git fetch --depth=1 origin main && git reset --hard FETCH_HEAD"},
                     m_sourceDir);
         } else {
             runStep(BuildStep::Cloning,
@@ -78,7 +84,10 @@ void BuildManager::advancePipeline()
                 "cmake", {
                     "-S", m_sourceDir,
                     "-B", m_buildDir,
-                    "-DCMAKE_BUILD_TYPE=Release"
+                    "-DCMAKE_BUILD_TYPE=Release",
+                    // The installed app's toolchain is kept when installing,
+                    // so don't download one into the build.
+                    "-DKAYTE_BUNDLE_TOOLS=OFF"
                 });
         break;
 
@@ -127,14 +136,14 @@ void BuildManager::runStep(BuildStep next, const QString &program,
     m_step = next;
 
     static const QMap<BuildStep, QPair<QString,int>> meta{
-        {BuildStep::Cloning,      {"Cloning repository…",   10}},
-        {BuildStep::Pulling,      {"Pulling latest code…",  10}},
-        {BuildStep::Configuring,  {"Configuring with CMake…",40}},
-        {BuildStep::Building,     {"Building KayteIDE…",    80}},
-        {BuildStep::Installing,   {"Installing…",            95}},
+        {BuildStep::Cloning,      {"Cloning repository...",   10}},
+        {BuildStep::Pulling,      {"Pulling latest code...",  10}},
+        {BuildStep::Configuring,  {"Configuring with CMake...",40}},
+        {BuildStep::Building,     {"Building KayteIDE...",    80}},
+        {BuildStep::Installing,   {"Installing...",            95}},
     };
 
-    auto [desc, pct] = meta.value(next, {"Working…", 50});
+    auto [desc, pct] = meta.value(next, {"Working...", 50});
     emit stepChanged(next, desc);
     emit progressChanged(pct);
     emit logLine(QString("▶ %1 %2").arg(program, args.join(' ')));

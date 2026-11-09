@@ -1,10 +1,10 @@
 #pragma once
-// Gtk4Editor.h – libreparser
+// Gtk4Editor.h - libreparser
 //
 // Minimal GTK4 counterpart to XmlEditorWindow's bootstrap sequence in
 // main.cpp (create window, show it, open the given file if any, run the
-// event loop). Not a full port of XmlEditorWindow — no tree/diagnostics
-// panes — just enough to mirror what the Qt6 branch does when built with
+// event loop). Not a full port of XmlEditorWindow - no tree/diagnostics
+// panes - just enough to mirror what the Qt6 branch does when built with
 // KAYTE_GTK4_ENABLED (see plugins/libreparser/CMakeLists.txt).
 //
 // Deliberately Qt-free: this header (and its .cpp) must never be included

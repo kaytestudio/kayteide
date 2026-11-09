@@ -1,4 +1,4 @@
-// propertyeditordock.cpp – KayteIDE
+// propertyeditordock.cpp - KayteIDE
 #include "propertyeditordock.h"
 #include "uicanvaswidget.h"
 
@@ -20,7 +20,7 @@ PropertyEditorDock::PropertyEditorDock(UiCanvasWidget *canvas, QWidget *parent)
     auto *form = new QFormLayout;
     form->setLabelAlignment(Qt::AlignRight);
 
-    m_typeValue = new QLabel(QStringLiteral("—"), container);
+    m_typeValue = new QLabel(QStringLiteral("-"), container);
     m_nameEdit  = new QLineEdit(container);
     m_textEdit  = new QLineEdit(container);
 
@@ -75,7 +75,7 @@ void PropertyEditorDock::onCanvasSelectionChanged(const CanvasItem *item)
     m_currentIndex = m_canvas->selectedIndex();
     m_updating = true;
     if (!item) {
-        m_typeValue->setText(QStringLiteral("—"));
+        m_typeValue->setText(QStringLiteral("-"));
         m_nameEdit->clear();
         m_textEdit->clear();
         m_xSpin->setValue(0); m_ySpin->setValue(0);

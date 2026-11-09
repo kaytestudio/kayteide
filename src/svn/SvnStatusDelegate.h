@@ -1,5 +1,5 @@
 #pragma once
-// SvnStatusDelegate.h – Paints a colored badge in the Status column
+// SvnStatusDelegate.h - Paints a colored badge in the Status column
 // C++17, Qt 6
 
 #include "SvnTypes.h"

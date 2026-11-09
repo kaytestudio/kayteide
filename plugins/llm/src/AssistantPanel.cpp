@@ -6,6 +6,8 @@
 #include <QComboBox>
 #include <QDesktopServices>
 #include <QDir>
+#include <QFile>
+#include <QSettings>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -70,7 +72,7 @@ QString sourceLink(const QString &relPath, int line)
         .arg(relPath).arg(line).arg(u.toString(QUrl::FullyEncoded));
 }
 
-// "1. How does X work?" / "- **Why** Y" → plain questions.
+// "1. How does X work?" / "- **Why** Y" -> plain questions.
 QStringList parsePrompts(const QString &text, int max)
 {
     static const QRegularExpression lead(QStringLiteral(R"(^\s*(?:[-*•]|\d+[.)])\s*)"));
@@ -105,7 +107,7 @@ AssistantPanel::AssistantPanel(QWidget *parent)
         m_ollamaModels = models;
         rebuildModelList();
         if (models.isEmpty() && providerOf(currentKey()) == QLatin1String("ollama"))
-            m_statusLbl->setText(tr("No local models installed – run `ollama pull llama3.2`, "
+            m_statusLbl->setText(tr("No local models installed - run `ollama pull llama3.2`, "
                                     "or pick Claude / Codex."));
     });
     connect(&m_client, &OllamaClient::token,    this, &AssistantPanel::onToken);
@@ -131,7 +133,7 @@ AssistantPanel::AssistantPanel(QWidget *parent)
     });
 
     rebuildModelList();
-    m_statusLbl->setText(tr("Connecting to Ollama…"));
+    m_statusLbl->setText(tr("Connecting to Ollama..."));
     m_client.ensureServer();
     updateSessionLabel();
     render();
@@ -148,7 +150,7 @@ void AssistantPanel::buildUi()
     lay->setContentsMargins(6, 6, 6, 6);
     lay->setSpacing(6);
 
-    // ── Top bar: model · learn · new · history ──────────────────────────────
+    // ── Top bar: model | learn | new | history ──────────────────────────────
     auto *top = new QHBoxLayout;
     m_model = new QComboBox(this);
     m_model->setToolTip(tr("Model: local (Ollama), Claude or Codex"));
@@ -172,7 +174,17 @@ void AssistantPanel::buildUi()
     m_historyBtn->setMenu(new QMenu(m_historyBtn));
     connect(m_historyBtn->menu(), &QMenu::aboutToShow, this, &AssistantPanel::populateHistoryMenu);
 
+    m_editBtn = new QToolButton(this);
+    m_editBtn->setText(tr("Edit files"));
+    m_editBtn->setCheckable(true);
+    m_editBtn->setToolTip(tr("On: the assistant makes the changes you ask for in the project's files "
+                             "(each answer lists them, with Undo). Off: it only answers."));
+    m_editMode = QSettings().value(QStringLiteral("assistant/editFiles"), true).toBool();
+    m_editBtn->setChecked(m_editMode);
+    connect(m_editBtn, &QToolButton::toggled, this, &AssistantPanel::setEditsFiles);
+
     top->addWidget(m_model, 1);
+    top->addWidget(m_editBtn);
     top->addWidget(m_learnBtn);
     top->addWidget(newBtn);
     top->addWidget(m_historyBtn);
@@ -207,7 +219,9 @@ void AssistantPanel::buildUi()
     m_transcript = new QTextBrowser(this);
     m_transcript->setOpenLinks(false);
     connect(m_transcript, &QTextBrowser::anchorClicked, this, [this](const QUrl &url) {
-        if (url.scheme() == QLatin1String(kSourceScheme)) {
+        if (url.scheme() == QLatin1String("kayte-undo")) {
+            undoChanges(url.path().toInt());
+        } else if (url.scheme() == QLatin1String(kSourceScheme)) {
             const QString rel  = url.path().mid(1);
             const int     line = QUrlQuery(url).queryItemValue(QStringLiteral("line")).toInt();
             emit openFileRequested(QDir(m_index.root()).absoluteFilePath(rel), line);
@@ -227,7 +241,7 @@ void AssistantPanel::buildUi()
 
     // ── Input ───────────────────────────────────────────────────────────────
     m_input = new QPlainTextEdit(this);
-    m_input->setPlaceholderText(tr("Ask about the code…  (Enter to send, Shift+Enter for a new line)"));
+    m_input->setPlaceholderText(tr("Ask about the code...  (Enter to send, Shift+Enter for a new line)"));
     m_input->setFixedHeight(72);
     m_input->installEventFilter(this);
 
@@ -236,8 +250,17 @@ void AssistantPanel::buildUi()
 
     auto *inputRow = new QHBoxLayout;
     inputRow->addWidget(m_input, 1);
+    auto *attachBtn = new QPushButton(tr("Attach..."), this);
+    attachBtn->setToolTip(tr("Attach text or source files to the next message"));
+    connect(attachBtn, &QPushButton::clicked, this, &AssistantPanel::attachFiles);
+    inputRow->addWidget(attachBtn, 0, Qt::AlignBottom);
     inputRow->addWidget(m_sendBtn, 0, Qt::AlignBottom);
     lay->addLayout(inputRow);
+
+    m_attachmentLabel = new QLabel(this);
+    m_attachmentLabel->setWordWrap(true);
+    m_attachmentLabel->hide();
+    lay->addWidget(m_attachmentLabel);
 
     m_renderTimer = new QTimer(this);
     m_renderTimer->setSingleShot(true);
@@ -284,7 +307,7 @@ void AssistantPanel::showOllamaStatus()
         m_statusLbl->setTextFormat(Qt::RichText);
         disconnect(m_statusLbl, &QLabel::linkActivated, nullptr, nullptr);
         connect(m_statusLbl, &QLabel::linkActivated, this, [this] {
-            m_statusLbl->setText(tr("Connecting to Ollama…"));
+            m_statusLbl->setText(tr("Connecting to Ollama..."));
             m_client.ensureServer();
         });
         return;
@@ -345,10 +368,10 @@ void AssistantPanel::rebuildModelList()
     for (const QString &m : std::as_const(m_ollamaModels))
         m_model->addItem(tr("%1  (local)").arg(m), QStringLiteral("ollama/") + m);
     if (!m_ollamaModels.isEmpty()) m_model->insertSeparator(m_model->count());
-    m_model->addItem(tr("Claude · Opus 5.5"),   QStringLiteral("claude/claude-opus-5-5"));
-    m_model->addItem(tr("Claude · Sonnet 5.5"), QStringLiteral("claude/claude-sonnet-5-5"));
-    m_model->addItem(tr("Claude · Haiku 4.5"),  QStringLiteral("claude/claude-haiku-4-5"));
-    m_model->addItem(tr("Codex · default model"), QStringLiteral("codex/"));
+    m_model->addItem(tr("Claude - Opus 5.5"),   QStringLiteral("claude/claude-opus-5-5"));
+    m_model->addItem(tr("Claude - Sonnet 5.5"), QStringLiteral("claude/claude-sonnet-5-5"));
+    m_model->addItem(tr("Claude - Haiku 4.5"),  QStringLiteral("claude/claude-haiku-4-5"));
+    m_model->addItem(tr("Codex - default model"), QStringLiteral("codex/"));
 
     int idx = m_model->findData(wanted);
     if (idx < 0) idx = m_model->findData(QStringLiteral("ollama/llama3.2:latest"));
@@ -375,7 +398,7 @@ void AssistantPanel::onModelChanged(bool userInitiated)
     }
     const auto p = cliProvider(key);
     if (userInitiated) LlmLog::write(QStringLiteral("panel"), QStringLiteral("selected %1").arg(currentLabel()));
-    m_statusLbl->setText(tr("Checking %1 sign-in…").arg(CliAgentClient::name(p)));
+    m_statusLbl->setText(tr("Checking %1 sign-in...").arg(CliAgentClient::name(p)));
     // Ask for sign-in only when the user picked it (not on startup / resume).
     m_pollProvider = userInitiated ? int(p) : -1;
     m_pollCount    = 0;
@@ -404,8 +427,8 @@ void AssistantPanel::onLoginStatus(CliAgentClient::Provider p, bool installed,
     if (!current) return;
     m_statusLbl->setTextFormat(Qt::RichText);
     m_statusLbl->setText(installed
-        ? tr("%1 is not signed in. <a href='signin'>Sign in…</a>").arg(CliAgentClient::name(p))
-        : tr("%1 CLI is not installed. <a href='install'>Install…</a>").arg(CliAgentClient::name(p)));
+        ? tr("%1 is not signed in. <a href='signin'>Sign in...</a>").arg(CliAgentClient::name(p))
+        : tr("%1 CLI is not installed. <a href='install'>Install...</a>").arg(CliAgentClient::name(p)));
     disconnect(m_statusLbl, &QLabel::linkActivated, nullptr, nullptr);
     connect(m_statusLbl, &QLabel::linkActivated, this, [this, p, installed] {
         promptSignIn(p, installed);
@@ -436,7 +459,7 @@ void AssistantPanel::promptSignIn(CliAgentClient::Provider p, bool installed)
             : tr("A Terminal window will run `codex login` and open your browser to sign in "
                  "with your ChatGPT account (or paste an OpenAI API key there). KayteIDE never "
                  "sees your credentials; it only records sign-in events in llm.log."));
-        box.addButton(tr("Sign in…"), QMessageBox::AcceptRole);
+        box.addButton(tr("Sign in..."), QMessageBox::AcceptRole);
     }
     box.addButton(QMessageBox::Cancel);
     if (box.exec() == QMessageBox::Cancel) {
@@ -444,14 +467,24 @@ void AssistantPanel::promptSignIn(CliAgentClient::Provider p, bool installed)
         return;
     }
 
-    m_cli.openTerminal(installed ? CliAgentClient::loginCommand(p)
-                                 : CliAgentClient::installCommand(p));
+    const bool terminalOpened = m_cli.openTerminal(installed ? CliAgentClient::loginCommand(p)
+                                                              : CliAgentClient::installCommand(p));
+    if (!terminalOpened) {
+        const QString error = tr("Could not open a terminal window. Install or enable a terminal app, "
+                                 "then run this command manually:\n\n%1")
+                                  .arg(installed ? CliAgentClient::loginCommand(p)
+                                                 : CliAgentClient::installCommand(p));
+        m_statusLbl->setText(error);
+        QMessageBox::warning(this, tr("Terminal unavailable"), error);
+        LlmLog::write(who, QStringLiteral("could not open terminal for sign-in"));
+        return;
+    }
     LlmLog::write(who, installed ? QStringLiteral("sign-in started in Terminal")
                                  : QStringLiteral("install started in Terminal"));
     m_statusLbl->setTextFormat(Qt::PlainText);
     m_statusLbl->setText(installed
-        ? tr("Waiting for you to finish signing in to %1 in Terminal…").arg(who)
-        : tr("Installing %1 in Terminal… pick it again when it's done.").arg(who));
+        ? tr("Waiting for you to finish signing in to %1 in Terminal...").arg(who)
+        : tr("Installing %1 in Terminal... pick it again when it's done.").arg(who));
     m_pollProvider = int(p);
     m_pollCount    = 0;
     m_loginPoll->start();
@@ -480,7 +513,7 @@ void AssistantPanel::setProjectRoot(const QString &root)
 
     if (m_index.isBuilding()) { m_pendingRoot = abs; return; }
     m_learnBtn->setEnabled(false);
-    m_statusLbl->setText(tr("Learning %1…").arg(QDir(abs).dirName()));
+    m_statusLbl->setText(tr("Learning %1...").arg(QDir(abs).dirName()));
     m_index.build(abs);
 }
 
@@ -495,7 +528,7 @@ void AssistantPanel::learnProject()
     m_session.projectRoot = QDir(root).absolutePath();
     if (m_index.isBuilding()) return;
     m_learnBtn->setEnabled(false);
-    m_statusLbl->setText(tr("Learning %1…").arg(QDir(root).dirName()));
+    m_statusLbl->setText(tr("Learning %1...").arg(QDir(root).dirName()));
     m_index.build(m_session.projectRoot);
 }
 
@@ -535,7 +568,163 @@ QString AssistantPanel::systemPrompt() const
     if (m_index.isReady())
         p += QStringLiteral("\n\nProject root: %1\nLanguages: %2")
                  .arg(m_index.root(), m_index.summary());
+    if (!m_editMode) return p;
+
+    // Earlier answers (edit mode off, or an older KayteIDE) may say the files
+    // are read-only; the history is part of the prompt, so overrule them.
+    p += QStringLiteral(
+        "\n\nYou can now change the project's files. If earlier messages in this conversation "
+        "say the workspace is read-only or that you cannot edit files, that is out of date: "
+        "do not repeat it, make the requested changes.");
+
+    if (providerOf(currentKey()) == QLatin1String("ollama")) {
+        // Local models write the changes as search/replace blocks, which
+        // KayteIDE applies (FileEdits.hpp).
+        p += QStringLiteral(
+            "\n\nWhen the user asks for a change to the code, make it: answer with a short "
+            "explanation, then one block per change in exactly this format:\n\n"
+            "path/to/file.ext\n"
+            "<<<<<<< SEARCH\n"
+            "the exact existing lines to change, copied from the file\n"
+            "=======\n"
+            "the new lines\n"
+            ">>>>>>> REPLACE\n\n"
+            "Rules: put the file path (relative to the project root) on the line before "
+            "<<<<<<< SEARCH. SEARCH must match the file exactly and only once, so include a few "
+            "unchanged lines around the change for context, and only use text you were shown. "
+            "Keep each block small; use several blocks for several places. To create a new file, "
+            "leave SEARCH empty and put the whole file in the replacement. For a short file you may "
+            "instead give the complete new file: its path on one line, then the whole file in a "
+            "``` code block. Do not use these blocks when the user only asks a question.");
+    } else {
+        p += QStringLiteral(
+            "\n\nWhen the user asks for a change to the code, make it directly in the project's "
+            "files with your edit tools. Keep changes minimal and "
+            "focused, then briefly say what you changed. Do not edit files when the user only "
+            "asks a question.");
+    }
     return p;
+}
+
+void AssistantPanel::setEditsFiles(bool on)
+{
+    m_editMode = on;
+    QSettings().setValue(QStringLiteral("assistant/editFiles"), on);
+    if (m_editBtn && m_editBtn->isChecked() != on) m_editBtn->setChecked(on);
+    emit statusMessage(on ? tr("Kayte Assistant will make the changes you ask for in your files.")
+                          : tr("Kayte Assistant will only answer - it won't change files."));
+}
+
+QString AssistantPanel::projectRootForEdits() const
+{
+    return m_index.isReady() ? m_index.root() : m_session.projectRoot;
+}
+
+// Applies (Ollama) or collects (Claude / Codex) the changes behind an answer
+// and returns the summary to show under it.
+QString AssistantPanel::applyAnswerEdits(const QString &answer)
+{
+    const QString root = projectRootForEdits();
+    if (root.isEmpty()) return {};
+    QList<FileChange> changes;
+    QStringList errors;
+    if (providerOf(currentKey()) == QLatin1String("ollama")) {
+        QString openRel;
+        if (m_currentFile) {
+            const QString open = m_currentFile().first;
+            if (!open.isEmpty() && open.startsWith(root + QLatin1Char('/'))) openRel = QDir(root).relativeFilePath(open);
+        }
+        const QList<FileEdit> edits = parseEdits(answer, openRel);
+        if (edits.isEmpty()) {
+            // Code in the answer but no block KayteIDE could apply: say so,
+            // rather than leaving the user to wonder why nothing was written.
+            if (!answer.contains(QLatin1String("```"))) return {};
+            LlmLog::write(QStringLiteral("panel"), QStringLiteral("edit mode: answer had code but no applicable edit blocks"));
+            return tr("*No file was changed: the answer has no SEARCH/REPLACE block (or file path + whole file) "
+                      "that could be applied. Ask again, e.g. \"apply this to <file>\", or use a larger model.*");
+        }
+        const EditPlan plan = planEdits(edits, root, m_textProvider ? m_textProvider : TextProvider(
+            [](const QString &abs) -> std::optional<QString> {
+                QFile f(abs);
+                if (!f.open(QIODevice::ReadOnly)) return std::nullopt;
+                return QString::fromUtf8(f.readAll());
+            }));
+        errors = plan.errors;
+        changes = applyChanges(plan.changes, &errors);   // the ones written, so they can be undone
+    } else {
+        if (m_snapshot.isEmpty()) return {};
+        changes = m_snapshot.changesSince();
+        m_snapshot = ProjectSnapshot {};
+    }
+
+    LlmLog::write(QStringLiteral("panel"), QStringLiteral("edit mode: %1 file(s) changed, %2 not applied")
+                                               .arg(changes.size()).arg(errors.size()));
+    QString md;
+    if (!changes.isEmpty()) {
+        m_changeSets << changes;
+        md = changeSummary(changes, root, QStringLiteral("kayte-undo:%1").arg(m_changeSets.size() - 1));
+        QStringList paths;
+        for (const FileChange &c : std::as_const(changes)) paths << c.path;
+        emit filesChanged(paths);
+        emit statusMessage(tr("Kayte Assistant changed %n file(s).", nullptr, int(changes.size())));
+    }
+    if (!errors.isEmpty())
+        md += (md.isEmpty() ? QString() : QStringLiteral("\n\n")) +
+              tr("**Not applied:**\n\n- %1").arg(errors.join(QStringLiteral("\n- ")));
+    return md;
+}
+
+QList<FileChange> AssistantPanel::applyChanges(const QList<FileChange> &changes, QStringList *errors)
+{
+    const FileWriter write = m_writer ? m_writer : FileWriter(&writeFileDirect);
+    QList<FileChange> written;
+    for (const FileChange &c : changes) {
+        QString err;
+        const std::optional<QString> text = c.after ? std::optional<QString>(QString::fromUtf8(*c.after)) : std::nullopt;
+        if (write(c.path, text, &err)) written << c;
+        else *errors << tr("%1: %2").arg(QDir(projectRootForEdits()).relativeFilePath(c.path), err);
+    }
+    return written;
+}
+
+// Puts files back as they were before an answer changed them. A file edited
+// again since is left alone (and named), so later work is never lost.
+void AssistantPanel::undoChanges(int set)
+{
+    if (set < 0 || set >= m_changeSets.size()) {
+        emit statusMessage(tr("Those changes can no longer be undone here (the session was reopened)."));
+        return;
+    }
+    if (m_undone.contains(set)) {
+        emit statusMessage(tr("Those changes were already undone."));
+        return;
+    }
+    const QString root = projectRootForEdits();
+    const FileWriter write = m_writer ? m_writer : FileWriter(&writeFileDirect);
+    QStringList restored, skipped, paths;
+    for (const FileChange &c : std::as_const(m_changeSets[set])) {
+        const QString rel = QDir(root).relativeFilePath(c.path);
+        if (!c.undoable) { skipped << tr("%1 (not kept)").arg(rel); continue; }
+        std::optional<QString> now;
+        if (m_textProvider) now = m_textProvider(c.path);
+        else if (QFile f(c.path); f.open(QIODevice::ReadOnly)) now = QString::fromUtf8(f.readAll());
+        const std::optional<QString> after = c.after ? std::optional<QString>(QString::fromUtf8(*c.after)) : std::nullopt;
+        if (now != after) { skipped << tr("%1 (edited since)").arg(rel); continue; }
+        QString err;
+        if (write(c.path, c.before ? std::optional<QString>(QString::fromUtf8(*c.before)) : std::nullopt, &err)) {
+            restored << rel;
+            paths << c.path;
+        } else {
+            skipped << tr("%1 (%2)").arg(rel, err);
+        }
+    }
+    m_undone.insert(set);
+    QString note = tr("*Undid the changes to %1.*").arg(restored.isEmpty() ? tr("no files") : restored.join(QStringLiteral(", ")));
+    if (!skipped.isEmpty()) note += tr(" *Left as they are: %1.*").arg(skipped.join(QStringLiteral(", ")));
+    m_session.messages.append({ QStringLiteral("assistant"), note, QDateTime::currentDateTime() });
+    render();
+    saveSession();
+    if (!paths.isEmpty()) emit filesChanged(paths);
 }
 
 void AssistantPanel::sendOrStop()
@@ -549,6 +738,21 @@ void AssistantPanel::sendOrStop()
     if (prompt.isEmpty()) return;
     m_input->clear();
     ask(prompt);
+}
+
+void AssistantPanel::attachFiles()
+{
+    const QStringList paths = QFileDialog::getOpenFileNames(
+        this, tr("Attach files to the next message"), QString(),
+        tr("Text and source files (*);;All files (*)"));
+    for (const QString &path : paths) {
+        const QString abs = QFileInfo(path).absoluteFilePath();
+        if (!m_attachments.contains(abs)) m_attachments << abs;
+    }
+    m_attachmentLabel->setText(m_attachments.isEmpty()
+        ? QString()
+        : tr("Attached for next message: %1").arg(m_attachments.join(QStringLiteral(", "))));
+    m_attachmentLabel->setVisible(!m_attachments.isEmpty());
 }
 
 void AssistantPanel::ask(const QString &prompt)
@@ -577,12 +781,29 @@ void AssistantPanel::ask(const QString &prompt)
 
     const Budget budget = providerOf(currentKey()) == QLatin1String("ollama") ? kLocalBudget
                                                                               : kCloudBudget;
+    for (const QString &path : std::as_const(m_attachments)) {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly)) {
+            context += tr("Attached file %1 could not be read.\n\n").arg(path);
+            continue;
+        }
+        const QByteArray bytes = file.read(budget.openFileChars + 1);
+        const QString text = QString::fromUtf8(bytes);
+        if (text.contains(QChar::ReplacementCharacter)) {
+            context += tr("Attached file %1 is binary and was not included.\n\n").arg(path);
+            continue;
+        }
+        const QString name = QFileInfo(path).fileName();
+        context += QStringLiteral("Attached file: %1\n````\n%2%3\n````\n\n")
+            .arg(name, text.left(budget.openFileChars),
+                 bytes.size() > budget.openFileChars ? QStringLiteral("\n... (truncated)") : QString());
+    }
     if (!openPath.isEmpty() && !openText.isEmpty()) {
         const QString lang = CodeIndex::languageFor(QFileInfo(openPath).fileName());
         context += QStringLiteral("Currently open file: %1\n```%2\n%3%4\n```\n\n")
             .arg(openRel.isEmpty() ? openPath : openRel, fence(lang),
                  openText.left(budget.openFileChars),
-                 openText.size() > budget.openFileChars ? QStringLiteral("\n… (truncated)") : QString());
+                 openText.size() > budget.openFileChars ? QStringLiteral("\n... (truncated)") : QString());
     }
 
     const auto chunks = m_index.search(prompt + QLatin1Char(' ') + QFileInfo(openPath).baseName(),
@@ -598,7 +819,7 @@ void AssistantPanel::ask(const QString &prompt)
     }
     m_lastSources = sources.isEmpty()
         ? QString()
-        : tr("\n\n<small>Context: %1</small>").arg(sources.join(QStringLiteral(" · ")));
+        : tr("\n\n<small>Context: %1</small>").arg(sources.join(QStringLiteral(" | ")));
 
     // ── Messages: system + recent history + this question with context ──────
     QJsonArray msgs;
@@ -607,7 +828,7 @@ void AssistantPanel::ask(const QString &prompt)
     auto historyText = [&](int i) {
         const QString &c = m_session.messages[i].content;
         return c.size() <= budget.historyChars ? c
-                                               : c.left(budget.historyChars) + QStringLiteral(" …");
+                                               : c.left(budget.historyChars) + QStringLiteral(" ...");
     };
     for (int i = from; i < m_session.messages.size(); ++i)
         msgs.append(QJsonObject { { "role",    m_session.messages[i].role },
@@ -629,6 +850,9 @@ void AssistantPanel::ask(const QString &prompt)
 
     const QString key = currentKey();
     m_session.messages.append({ QStringLiteral("user"), prompt, QDateTime::currentDateTime() });
+    m_attachments.clear();
+    m_attachmentLabel->clear();
+    m_attachmentLabel->hide();
     m_session.model = key;
     m_streaming.clear();
     setSuggestions({});
@@ -638,8 +862,9 @@ void AssistantPanel::ask(const QString &prompt)
     render();
 
     m_askStarted = QDateTime::currentMSecsSinceEpoch();
-    LlmLog::write(QStringLiteral("panel"), QStringLiteral("ask via %1, session %2, %3 chars")
-                                               .arg(currentLabel(), m_session.id).arg(prompt.size()));
+    LlmLog::write(QStringLiteral("panel"), QStringLiteral("ask via %1, session %2, %3 chars, edit files %4")
+                                               .arg(currentLabel(), m_session.id).arg(prompt.size())
+                                               .arg(m_editMode ? QStringLiteral("on") : QStringLiteral("off")));
     if (providerOf(key) == QLatin1String("ollama")) {
         qsizetype chars = 0;
         for (const auto &m : std::as_const(msgs))
@@ -647,8 +872,9 @@ void AssistantPanel::ask(const QString &prompt)
         m_ollamaCtx = contextWindowFor(chars);
         m_client.chat(QString::fromLatin1(kAnswerTag), modelOf(key), msgs, -1, m_ollamaCtx);
     } else {
-        m_cli.run(QString::fromLatin1(kAnswerTag), cliProvider(key), modelOf(key), flat,
-                  m_index.isReady() ? m_index.root() : m_session.projectRoot);
+        const QString root = m_index.isReady() ? m_index.root() : m_session.projectRoot;
+        if (m_editMode && !root.isEmpty()) m_snapshot.take(root);   // to report (and undo) its edits
+        m_cli.run(QString::fromLatin1(kAnswerTag), cliProvider(key), modelOf(key), flat, root, m_editMode);
     }
 }
 
@@ -685,6 +911,13 @@ void AssistantPanel::finishAnswer(const QString &text, const QString &note)
 {
     QString content = text.trimmed();
     if (!note.isEmpty()) content += QStringLiteral("\n\n") + note;
+    // Edit mode: a finished answer's changes are applied (local models) or
+    // collected (Claude / Codex already made them) - stopped / failed ones
+    // still report what an agent changed so it can be undone.
+    if (m_editMode && (note.isEmpty() || providerOf(currentKey()) != QLatin1String("ollama"))) {
+        const QString edits = applyAnswerEdits(text);
+        if (!edits.isEmpty()) content += QStringLiteral("\n\n") + edits;
+    }
     content += m_lastSources;
 
     m_session.messages.append({ QStringLiteral("assistant"), content,
@@ -709,7 +942,7 @@ void AssistantPanel::setBusy(bool busy)
     m_model->setEnabled(!busy);
     if (busy) {
         m_statusLbl->setTextFormat(Qt::PlainText);
-        m_statusLbl->setText(tr("Thinking with %1…").arg(currentLabel()));
+        m_statusLbl->setText(tr("Thinking with %1...").arg(currentLabel()));
     }
     else if (m_index.isReady())
         m_statusLbl->setText(tr("Learned %1 files (%2)")
@@ -839,7 +1072,7 @@ bool AssistantPanel::resumeSession(const QString &idOrPrefix, QString *error)
         if (m_index.isBuilding()) m_pendingRoot = m_session.projectRoot;
         else {
             m_learnBtn->setEnabled(false);
-            m_statusLbl->setText(tr("Learning %1…").arg(QDir(m_session.projectRoot).dirName()));
+            m_statusLbl->setText(tr("Learning %1...").arg(QDir(m_session.projectRoot).dirName()));
             m_index.build(m_session.projectRoot);
         }
     }
@@ -862,7 +1095,7 @@ void AssistantPanel::populateHistoryMenu()
         return;
     }
     for (const AssistantSession &s : sessions) {
-        const QString label = QStringLiteral("%1  %2  —  %3")
+        const QString label = QStringLiteral("%1  %2  -  %3")
             .arg(s.id, s.updated.toString(QStringLiteral("dd MMM HH:mm")), s.title());
         QAction *a = menu->addAction(label, this, [this, id = s.id] {
             QString err;
@@ -897,7 +1130,7 @@ void AssistantPanel::render()
                 "BASIC and CMake** code and answers questions about it.\n\n"
                 "1. Open a project or press **Learn**.\n"
                 "2. Pick one of the suggested prompts, or ask your own.\n"
-                "3. When you quit, the session is saved — reopen it with "
+                "3. When you quit, the session is saved - reopen it with "
                 "`KayteIDE --resume %1`.").arg(m_session.id);
     }
     for (const ChatMessage &m : std::as_const(m_session.messages)) {
@@ -906,7 +1139,7 @@ void AssistantPanel::render()
     }
     if (m_busy)
         md += tr("#### Assistant\n\n") +
-              (m_streaming.isEmpty() ? tr("*thinking…*") : m_streaming) + QStringLiteral("\n");
+              (m_streaming.isEmpty() ? tr("*thinking...*") : m_streaming) + QStringLiteral("\n");
 
     QScrollBar *sb = m_transcript->verticalScrollBar();
     const bool atBottom = sb->value() >= sb->maximum() - 8;

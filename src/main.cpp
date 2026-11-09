@@ -47,7 +47,7 @@ int main(int argc, char *argv[])
 
     // ── Command-line parsing ─────────────────────────────────────────────────
     QCommandLineParser parser;
-    parser.setApplicationDescription("KayteIDE – The Kayte Language IDE");
+    parser.setApplicationDescription("KayteIDE - The Kayte Language IDE");
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addPositionalArgument("path",
@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
     };
 
     if (!tryLoad(languageCode) && !tryLoad("en")) {
-        qWarning() << "No translations loaded – running with built-in strings.";
+        qWarning() << "No translations loaded - running with built-in strings.";
         delete translator;
         translator = nullptr;
     }
@@ -102,13 +102,13 @@ int main(int argc, char *argv[])
     // ── Splash screen ────────────────────────────────────────────────────────
     QPixmap splashPixmap(":/kayte.png");
     if (splashPixmap.isNull())
-        qWarning("Splash image 'kayte.png' not found – skipping splash.");
+        qWarning("Splash image 'kayte.png' not found - skipping splash.");
 
     QScopedPointer<QSplashScreen> splash;
     if (!splashPixmap.isNull()) {
         splash.reset(new QSplashScreen(splashPixmap));
         splash->showMessage(
-            QObject::tr("Loading KayteIDE…"),
+            QObject::tr("Loading KayteIDE..."),
             Qt::AlignBottom | Qt::AlignCenter,
             Qt::white);
         splash->show();

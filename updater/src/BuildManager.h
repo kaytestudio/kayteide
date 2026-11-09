@@ -33,6 +33,9 @@ public:
     void setRunInstall(bool run)             { m_runInstall = run; }
 
     BuildStep currentStep() const           { return m_step; }
+    QString   sourceDir() const             { return m_sourceDir; }
+    // The KayteIDE.app a successful build produced (macOS).
+    QString   builtApp() const              { return m_buildDir + "/bin/KayteIDE.app"; }
     bool isRunning() const;
 
 public slots:

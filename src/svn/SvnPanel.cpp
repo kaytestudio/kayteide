@@ -1,4 +1,4 @@
-// SvnPanel.cpp – KaytEIDE SVN dock panel
+// SvnPanel.cpp - KaytEIDE SVN dock panel
 // C++17, Qt 6
 
 #include "SvnPanel.h"
@@ -74,8 +74,8 @@ void SvnPanel::setupUi()
     // ── WC path row ──────────────────────────────────────────────────────────
     auto *pathRow = new QHBoxLayout;
     m_ui.wcEdit   = new QLineEdit(this);
-    m_ui.wcEdit->setPlaceholderText(tr("Working copy path…"));
-    m_ui.browseBtn = new QPushButton(tr("…"), this);
+    m_ui.wcEdit->setPlaceholderText(tr("Working copy path..."));
+    m_ui.browseBtn = new QPushButton(tr("..."), this);
     m_ui.browseBtn->setFixedWidth(30);
     pathRow->addWidget(new QLabel(tr("WC:"), this));
     pathRow->addWidget(m_ui.wcEdit);
@@ -143,7 +143,7 @@ void SvnPanel::setupToolbar()
 
     tb->addAction(
         QApplication::style()->standardIcon(QStyle::SP_ArrowUp),
-        tr("Commit…"), this, &SvnPanel::onCommit);
+        tr("Commit..."), this, &SvnPanel::onCommit);
 
     tb->addSeparator();
 
@@ -163,7 +163,7 @@ void SvnPanel::setupToolbar()
 
     tb->addAction(
         QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView),
-        tr("Log…"), this, &SvnPanel::onShowLog);
+        tr("Log..."), this, &SvnPanel::onShowLog);
 
     tb->addAction(
         QApplication::style()->standardIcon(QStyle::SP_FileDialogInfoView),
@@ -185,7 +185,7 @@ void SvnPanel::setupConnections()
         if (!dir.isEmpty()) setWorkingCopy(dir);
     });
 
-    // WC edit – refresh on enter
+    // WC edit - refresh on enter
     connect(m_ui.wcEdit, &QLineEdit::returnPressed, this, [this] {
         setWorkingCopy(m_ui.wcEdit->text().trimmed());
     });
@@ -223,7 +223,7 @@ void SvnPanel::setupConnections()
 void SvnPanel::onRefresh()
 {
     if (m_wcPath.isEmpty()) return;
-    setStatus(tr("Refreshing…"));
+    setStatus(tr("Refreshing..."));
     m_client->status(m_wcPath, true);
 }
 
@@ -232,7 +232,7 @@ void SvnPanel::onUpdate()
     if (m_wcPath.isEmpty()) return;
     QStringList paths = selectedPaths();
     if (paths.isEmpty()) paths = { m_wcPath };
-    setStatus(tr("Updating…"));
+    setStatus(tr("Updating..."));
     m_client->update(paths);
 }
 
@@ -247,7 +247,7 @@ void SvnPanel::onCommit()
     SvnCommitDialog dlg(paths, this);
     if (dlg.exec() != QDialog::Accepted) return;
 
-    setStatus(tr("Committing…"));
+    setStatus(tr("Committing..."));
     m_client->commit(paths, dlg.message());
 }
 
@@ -259,7 +259,7 @@ void SvnPanel::onRevert()
             tr("Revert %1 file(s)? All local changes will be lost.").arg(paths.size()))
         != QMessageBox::Yes) return;
     m_client->revert(paths);
-    setStatus(tr("Reverting…"));
+    setStatus(tr("Reverting..."));
 }
 
 void SvnPanel::onAdd()
@@ -267,7 +267,7 @@ void SvnPanel::onAdd()
     QStringList paths = selectedPaths();
     if (paths.isEmpty()) return;
     m_client->add(paths);
-    setStatus(tr("Adding…"));
+    setStatus(tr("Adding..."));
 }
 
 void SvnPanel::onDelete()
@@ -278,7 +278,7 @@ void SvnPanel::onDelete()
             tr("Schedule %1 file(s) for deletion?").arg(paths.size()))
         != QMessageBox::Yes) return;
     m_client->remove(paths);
-    setStatus(tr("Deleting…"));
+    setStatus(tr("Deleting..."));
 }
 
 void SvnPanel::onShowLog()
@@ -306,7 +306,7 @@ void SvnPanel::onCleanup()
 {
     if (m_wcPath.isEmpty()) return;
     m_client->cleanup(m_wcPath);
-    setStatus(tr("Cleaning up…"));
+    setStatus(tr("Cleaning up..."));
 }
 
 // ── Client signal handlers ────────────────────────────────────────────────
@@ -314,7 +314,7 @@ void SvnPanel::onCleanup()
 void SvnPanel::onStatusReady(const QList<StatusEntry> &entries)
 {
     m_model->setEntries(entries);
-    setStatus(tr("%1 file(s) — %2")
+    setStatus(tr("%1 file(s) - %2")
         .arg(entries.size())
         .arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
 }
@@ -341,7 +341,7 @@ void SvnPanel::onContextMenu(const QPoint &pos)
     QMenu menu(this);
     menu.addAction(tr("Open"),        this, [this, idx]{ onActivated(idx); });
     menu.addAction(tr("Diff"),        this, &SvnPanel::onShowDiff);
-    menu.addAction(tr("Log…"),        this, &SvnPanel::onShowLog);
+    menu.addAction(tr("Log..."),        this, &SvnPanel::onShowLog);
     menu.addSeparator();
     menu.addAction(tr("Add"),         this, &SvnPanel::onAdd);
     menu.addAction(tr("Revert"),      this, &SvnPanel::onRevert);

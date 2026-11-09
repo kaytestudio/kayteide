@@ -1,5 +1,5 @@
 #pragma once
-// propertyeditordock.h – KayteIDE
+// propertyeditordock.h - KayteIDE
 // Right-side dock: edits the properties (name, text, geometry) of whichever
 // component is currently selected on the UiCanvasWidget.
 

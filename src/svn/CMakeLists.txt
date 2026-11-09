@@ -1,5 +1,5 @@
 ##############################################################################
-# kayteide – SVN Client Module
+# kayteide - SVN Client Module
 # Integrates Apache Subversion into the KaytEIDE application.
 #
 # Requires: Qt 6, C++17, and either libsvn or the svn command-line tool.

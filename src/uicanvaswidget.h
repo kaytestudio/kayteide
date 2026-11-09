@@ -1,5 +1,5 @@
 #pragma once
-// uicanvaswidget.h – KayteIDE
+// uicanvaswidget.h - KayteIDE
 // Drop-target canvas: drag widgets from the palette, position them,
 // then export to a standard Qt .ui XML file.
 
@@ -12,15 +12,21 @@
 #include <QMenu>
 #include <QUndoStack>
 #include <QUndoCommand>
+#include <QVariantMap>
 
 // ─── One placed widget record ─────────────────────────────────────────────────
 struct CanvasItem
 {
-    QString widgetType;   // "QPushButton", "QLabel", …
-    QString objectName;   // "pushButton_1", "label_3", …
+    QString widgetType;   // "QPushButton", "QLabel", ...
+    QString objectName;   // "pushButton_1", "label_3", ...
     QString labelText;    // displayed text / placeholder
     QRect   geometry;     // position + size on canvas
     bool    selected { false };
+
+    // InForm controls ("InForm::Button", ...) only: the Frame / menu the control
+    // belongs to, and the InForm properties carried through .frm round-trips.
+    QString     parentName;
+    QVariantMap properties;
 };
 
 // ─── UiCanvasWidget ───────────────────────────────────────────────────────────
@@ -39,7 +45,19 @@ public:
 
     // ── User-facing ───────────────────────────────────────────────────────────
     bool       exportUiFile(const QString &filePath) const;
+    QString    toUiXml() const;                          // the .ui XML exportUiFile writes
+    // The Qt class a canvas item stands for (InForm controls map to their
+    // closest Qt widget; empty when there is none, e.g. menu entries).
+    static QString qtClassOf(const CanvasItem &item);
     void       clearCanvas();
+    void       setItems(const QList<CanvasItem> &items); // replace everything (e.g. .frm import)
+    // Replace everything but keep the undo history and the selection (by
+    // object name) - used by ReplaceItemsCmd when the Code tab is edited.
+    void       replaceItems(const QList<CanvasItem> &items);
+
+    // Adds a widget of `type` (a palette key) at `pos`, or at the next free
+    // spot when `pos` is null - used by double-clicks in the side panels.
+    void       addWidget(const QString &type, QPoint pos = QPoint(-1, -1));
     QUndoStack *undoStack() { return m_undoStack; }
 
     // ── Read access for side panels (Components / Property editors) ───────────
@@ -75,6 +93,10 @@ private:
     void  drawSelectionHandles(QPainter &p, const CanvasItem &item) const;
 
     int   itemAt    (const QPoint &pos) const;
+    // Frames / group boxes carry what sits inside them when moved.
+    bool       isContainer       (int index) const;
+    QList<int> containedItems    (int index) const;
+    void       moveWithContents  (int index, QPoint newTopLeft);
     void  selectItem(int index);
     void  deleteSelected();
     void  snapToGrid(QPoint &pt) const;
@@ -87,6 +109,8 @@ private:
     QPoint  m_dragOffset;
     QPoint  m_moveStartPos;   // canvas-local top-left when a drag began (for undo)
     bool    m_draggingItem   { false };
+    QList<int>    m_dragChildren;     // items moving along with a dragged container
+    QList<QPoint> m_dragChildStart;   // their top-left when the drag began
 
     QPoint  m_dropPreviewPt;
     bool    m_showDropPreview{ false };
@@ -96,7 +120,7 @@ private:
     QUndoStack *m_undoStack  { nullptr };
 };
 
-// ─── Undo commands (defined inline – they're tiny) ────────────────────────────
+// ─── Undo commands (defined inline - they're tiny) ────────────────────────────
 
 class AddItemCmd : public QUndoCommand {
 public:
@@ -134,4 +158,16 @@ private:
     UiCanvasWidget *m_c;
     int    m_idx;
     QPoint m_from, m_to;
+};
+
+class ReplaceItemsCmd : public QUndoCommand {
+public:
+    ReplaceItemsCmd(UiCanvasWidget *c, QList<CanvasItem> before, QList<CanvasItem> after)
+        : QUndoCommand(QLatin1String("Edit code"))
+        , m_c(c), m_before(std::move(before)), m_after(std::move(after)) {}
+    void redo() override { m_c->replaceItems(m_after); }
+    void undo() override { m_c->replaceItems(m_before); }
+private:
+    UiCanvasWidget   *m_c;
+    QList<CanvasItem> m_before, m_after;
 };

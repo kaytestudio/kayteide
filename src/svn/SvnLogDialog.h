@@ -1,5 +1,5 @@
 #pragma once
-// SvnLogDialog.h – Modeless dialog showing SVN log for a path
+// SvnLogDialog.h - Modeless dialog showing SVN log for a path
 // C++17, Qt 6
 
 #include "SvnTypes.h"

@@ -30,7 +30,7 @@ OllamaClient::OllamaClient(QObject *parent)
 
 namespace {
 // How long Ollama keeps a model in RAM after the last request. Short, because
-// a 3B model pins ~2–3 GB; reloading it takes only a couple of seconds.
+// a 3B model pins ~2-3 GB; reloading it takes only a couple of seconds.
 const char *kKeepAlive = "2m";
 }
 
@@ -156,7 +156,7 @@ void OllamaClient::ping(int attemptsLeft)
                 m_server->setProcessEnvironment(env);
 #ifdef Q_OS_UNIX
                 // A watchdog shell runs `ollama serve` and stops it when the
-                // IDE exits — normally (SIGTERM from our destructor) or not
+                // IDE exits - normally (SIGTERM from our destructor) or not
                 // (crash, force quit), so the server never outlives the IDE.
                 m_server->setProgram(QStringLiteral("/bin/sh"));
                 m_server->setArguments({

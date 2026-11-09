@@ -8,7 +8,7 @@ void assert_int(int got, int expected, const char *name) {
         printf("PASS: %s\n", name);
         passed++;
     } else {
-        printf("FAIL: %s — expected %d got %d\n", name, expected, got);
+        printf("FAIL: %s - expected %d got %d\n", name, expected, got);
         failed++;
     }
 }

@@ -1,5 +1,10 @@
 #include "LogWidget.h"
 
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+
 #include <QScrollBar>
 #include <QTextCharFormat>
 
@@ -36,8 +41,27 @@ LogWidget::LogWidget(QWidget *parent)
     )");
 }
 
+namespace {
+// Everything shown in the log is also appended to ~/Library/Logs/KayteIDEUpdater.log
+// (~/.local/state/KayteIDEUpdater.log elsewhere), so an update that closed
+// and reopened KayteIDE can be followed afterwards.
+void writeLogFile(const QString &text)
+{
+#ifdef Q_OS_MACOS
+    const QString path = QDir::homePath() + "/Library/Logs/KayteIDEUpdater.log";
+#else
+    const QString path = QDir::homePath() + "/.local/state/KayteIDEUpdater.log";
+#endif
+    QDir().mkpath(QFileInfo(path).absolutePath());
+    QFile f(path);
+    if (f.open(QIODevice::Append | QIODevice::Text))
+        f.write((QDateTime::currentDateTime().toString(Qt::ISODate) + "  " + text + "\n").toUtf8());
+}
+} // namespace
+
 void LogWidget::appendLog(const QString &line, bool isError)
 {
+    writeLogFile((isError ? "! " : "  ") + line);
     QTextCharFormat fmt;
     if (isError)
         fmt.setForeground(QColor("#f85149")); // GitHub red
@@ -59,6 +83,7 @@ void LogWidget::appendLog(const QString &line, bool isError)
 
 void LogWidget::appendSection(const QString &title)
 {
+    writeLogFile("== " + title);
     QTextCharFormat fmt;
     fmt.setForeground(QColor("#8b949e"));
     fmt.setFontWeight(QFont::Bold);

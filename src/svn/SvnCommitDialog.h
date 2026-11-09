@@ -1,5 +1,5 @@
 #pragma once
-// SvnCommitDialog.h – Modal commit dialog with file list + message editor
+// SvnCommitDialog.h - Modal commit dialog with file list + message editor
 // C++17, Qt 6
 
 #include "SvnTypes.h"

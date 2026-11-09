@@ -9,7 +9,7 @@ begin
     WriteLn('PASS: ', name);
     Inc(passed);
   end else begin
-    WriteLn('FAIL: ', name, ' — expected ', b, ' got ', a);
+    WriteLn('FAIL: ', name, ' - expected ', b, ' got ', a);
     Inc(failed);
   end;
 end;

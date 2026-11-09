@@ -1,5 +1,5 @@
 #pragma once
-// XmlEditorWindow.h – libreparser
+// XmlEditorWindow.h - libreparser
 // A small standalone editor for "window" XML documents: source on one side,
 // parsed tree + validation diagnostics ("debug" output) on the other.
 

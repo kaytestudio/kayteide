@@ -70,7 +70,7 @@ SvnLogDialog::SvnLogDialog(SvnClient *client, const QString &path, QWidget *pare
     , m_model(new SvnLogModel(this))
     , m_path(path)
 {
-    setWindowTitle(tr("SVN Log — %1").arg(path));
+    setWindowTitle(tr("SVN Log - %1").arg(path));
     setMinimumSize(700, 500);
     setAttribute(Qt::WA_DeleteOnClose);
 
@@ -96,11 +96,11 @@ SvnLogDialog::SvnLogDialog(SvnClient *client, const QString &path, QWidget *pare
 
     m_msgView = new QTextEdit(this);
     m_msgView->setReadOnly(true);
-    m_msgView->setPlaceholderText(tr("Commit message…"));
+    m_msgView->setPlaceholderText(tr("Commit message..."));
 
     m_paths = new QTextEdit(this);
     m_paths->setReadOnly(true);
-    m_paths->setPlaceholderText(tr("Changed paths…"));
+    m_paths->setPlaceholderText(tr("Changed paths..."));
     m_paths->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
 
     lowerLay->addWidget(m_msgView, 2);

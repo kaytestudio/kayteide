@@ -23,16 +23,16 @@
 #endif
 
 namespace {
-// The installer's "==> …" steps, in order; used for the progress bar.
+// The installer's "==> ..." steps, in order; used for the progress bar.
 const char *const kSteps[] = {
     "Rosetta 2", "Xcode Command Line Tools", "Locating Lazarus", "Free Pascal Compiler",
-    "Lazarus", "Kayte SDK", "QEMU", "Finishing",
+    "Lazarus", "Kayte SDK", "QEMU", "GnuCOBOL", "Finishing",
 };
 constexpr int kStepCount = int(sizeof(kSteps) / sizeof(kSteps[0]));
 
 QString appBundlePath()
 {
-    // KayteIDE.app/Contents/MacOS → KayteIDE.app
+    // KayteIDE.app/Contents/MacOS -> KayteIDE.app
     return QDir::cleanPath(QCoreApplication::applicationDirPath() + QStringLiteral("/../.."));
 }
 } // namespace
@@ -63,12 +63,13 @@ ToolchainSetupDialog::ToolchainSetupDialog(QWidget *parent)
     auto *title = new QLabel(tr("<b>Installing the KayteIDE toolchain</b>"), this);
     auto *about = new QLabel(
         tr("Rosetta 2, the Xcode Command Line Tools, Free Pascal, Lazarus, the Kayte SDK "
-           "and QEMU are installed into KayteIDE.app (about 2.6 GB). macOS may ask for "
+           "and QEMU are installed into KayteIDE.app (about 2.6 GB), and GnuCOBOL with "
+           "Homebrew. macOS may ask for "
            "your password (Rosetta 2) or to install the Command Line Tools. You can keep "
            "working while this runs."), this);
     about->setWordWrap(true);
 
-    m_step = new QLabel(tr("Starting…"), this);
+    m_step = new QLabel(tr("Starting..."), this);
     m_progress = new QProgressBar(this);
     m_progress->setRange(0, kStepCount);
     m_progress->setValue(0);
@@ -134,7 +135,7 @@ void ToolchainSetupDialog::start()
     m_lastError.clear();
     m_pending.clear();
     m_progress->setValue(0);
-    m_step->setText(tr("Starting…"));
+    m_step->setText(tr("Starting..."));
     m_cancel->show();
     m_cancel->setEnabled(true);
     m_retry->hide();
@@ -184,8 +185,8 @@ void ToolchainSetupDialog::onOutput()
         } else if (line.contains(QLatin1String("downloading")) || line.contains(QLatin1String("extracting"))
                    || line.contains(QLatin1String("cloning")) || line.contains(QLatin1String("building"))
                    || line.contains(QLatin1String("launching the installer"))) {
-            m_step->setText(m_step->text().section(QStringLiteral(" — "), 0, 0)
-                            + QStringLiteral(" — ") + line);
+            m_step->setText(m_step->text().section(QStringLiteral(" - "), 0, 0)
+                            + QStringLiteral(" - ") + line);
         }
     }
 }
@@ -208,7 +209,7 @@ void ToolchainSetupDialog::onFinished(int exitCode, bool crashed)
         m_close->show();
         m_close->setDefault(true);
     } else if (m_cancelled) {
-        m_step->setText(tr("Cancelled. Run it again from Tools ▸ Install / Update Toolchain…"));
+        m_step->setText(tr("Cancelled. Run it again from Tools > Install / Update Toolchain..."));
         m_close->show();
     } else {
         if (installerScript().isEmpty())
@@ -226,7 +227,7 @@ bool ToolchainSetupDialog::confirmCancel()
 {
     return QMessageBox::question(this, windowTitle(),
                tr("Stop installing the toolchain? You can run it again later from "
-                  "Tools ▸ Install / Update Toolchain…")) == QMessageBox::Yes;
+                  "Tools > Install / Update Toolchain...")) == QMessageBox::Yes;
 }
 
 void ToolchainSetupDialog::stopInstaller()
@@ -234,7 +235,7 @@ void ToolchainSetupDialog::stopInstaller()
     if (!m_process || m_process->state() == QProcess::NotRunning) return;
     m_cancelled = true;
     m_cancel->setEnabled(false);
-    m_step->setText(tr("Stopping…"));
+    m_step->setText(tr("Stopping..."));
 #ifdef Q_OS_UNIX
     // The whole group: the script traps TERM and cleans up its temp files.
     ::kill(-pid_t(m_process->processId()), SIGTERM);

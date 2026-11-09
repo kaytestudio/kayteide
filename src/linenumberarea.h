@@ -8,11 +8,11 @@
 // A thin QPlainTextEdit subclass that exposes five protected methods needed by
 // LineNumberArea without any friend-class hacks:
 //
-//   firstVisibleBlock()       – first block visible in the viewport
-//   blockBoundingGeometry()   – bounding rect in document coordinates
-//   blockBoundingRect()       – bounding rect in block coordinates
-//   contentOffset()           – scroll offset of the content
-//   setViewportMargins()      – reserve space for the line-number gutter
+//   firstVisibleBlock()       - first block visible in the viewport
+//   blockBoundingGeometry()   - bounding rect in document coordinates
+//   blockBoundingRect()       - bounding rect in block coordinates
+//   contentOffset()           - scroll offset of the content
+//   setViewportMargins()      - reserve space for the line-number gutter
 //
 // Use CodeEditor everywhere instead of QPlainTextEdit.  It is a drop-in
 // replacement; no behaviour changes, only the five methods become public.
@@ -50,7 +50,7 @@ public:
 // ── LineNumberArea ────────────────────────────────────────────────────────────
 // Works together with CodeEditor.  The uploaded linenumberarea.cpp implements
 // the rendering using document()->documentLayout()->blockBoundingRect() which
-// is fully public and does not need CodeEditor at all — so the .cpp file
+// is fully public and does not need CodeEditor at all - so the .cpp file
 // compiles unchanged.  This header only declares the class interface.
 // ─────────────────────────────────────────────────────────────────────────────
 class LineNumberArea : public QWidget

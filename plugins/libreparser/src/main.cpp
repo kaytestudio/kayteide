@@ -10,10 +10,10 @@ int main(int argc, char *argv[])
 {
 #ifdef KAYTE_GTK4_ENABLED
     // Explicit opt-in: `libreparser --gtk4 [file.xml]` runs the GTK4 UI
-    // instead of the default Qt6 one below — same idea (create the window,
+    // instead of the default Qt6 one below - same idea (create the window,
     // show it, open the given file if any) implemented with GTK4. Only
     // reachable on builds where GTK4 was actually found (KAYTE_GTK4_ENABLED
-    // is set by CMake on Linux / macOS when pkg-config locates gtk4 — see
+    // is set by CMake on Linux / macOS when pkg-config locates gtk4 - see
     // plugins/libreparser/CMakeLists.txt), so the flag simply doesn't exist
     // on builds without it.
     if (argc > 1 && std::strcmp(argv[1], "--gtk4") == 0) {

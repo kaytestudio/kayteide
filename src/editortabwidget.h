@@ -13,7 +13,9 @@ class KayteSyntaxHighlighter;
 class PascalSyntaxHighlighter;
 class DelphiSyntaxHighlighter;
 class MarkdownSyntaxHighlighter;
+class CobolSyntaxHighlighter;
 class QButtonGroup;
+class BreadcrumbBar;
 class QSplitter;
 class QTextBrowser;
 class QTimer;
@@ -32,8 +34,11 @@ public:
 
     // Getters
     QString filePath() const { return m_filePath; }
-    bool isModified() const;  // ← ADDED: Returns document modified state
+    bool isModified() const;  // <- ADDED: Returns document modified state
     QPlainTextEdit* getPlainTextEdit() const { return m_editor; }
+    BreadcrumbBar*  breadcrumbs() const { return m_breadcrumbs; }
+    // Moves the cursor to a 1-based line and centres it.
+    void goToLine(int line);
     LineNumberArea* getLineNumberArea() const { return m_lineNumberArea; }
 
     // Setters
@@ -45,7 +50,7 @@ public:
     struct Diagnostic {
         int line = 0;
         int column = 0;
-        QString severity;   // "error", "warning", "note", …
+        QString severity;   // "error", "warning", "note", ...
         QString message;
     };
     void setDiagnostics(const QVector<Diagnostic> &diagnostics);
@@ -93,6 +98,7 @@ private:
     PascalSyntaxHighlighter *m_pascalHighlighter;
     DelphiSyntaxHighlighter *m_delphiHighlighter;
     MarkdownSyntaxHighlighter *m_markdownHighlighter { nullptr };
+    CobolSyntaxHighlighter *m_cobolHighlighter { nullptr };
 
     // Markdown preview (created on demand for .md files)
     QWidget      *m_editorPane   { nullptr };   // line numbers + editor
@@ -104,6 +110,12 @@ private:
 
     QString m_filePath;
     QVector<Diagnostic> m_diagnostics;
+
+    // Breadcrumbs: path + the symbol under the cursor, rescanned after edits.
+    BreadcrumbBar *m_breadcrumbs { nullptr };
+    QTimer        *m_symbolTimer { nullptr };
+    QString        m_crumbFile;
+    void updateBreadcrumbs();
 };
 
 #endif // EDITORTABWIDGET_H

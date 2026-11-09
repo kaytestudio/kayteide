@@ -13,7 +13,7 @@ struct LanguageRunner {
     // For interpreted languages this is the direct run command.
     enum class Mode {
         Interpreted,    // interpreter runs the file directly
-        Compiled,       // needs compile → run two-step
+        Compiled,       // needs compile -> run two-step
         QtTest,         // compiled QTest binary (existing behaviour)
         HeaderOnly      // just lint/analyse, no run
     } mode = Mode::Interpreted;

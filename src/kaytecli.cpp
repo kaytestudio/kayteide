@@ -117,8 +117,8 @@ QString executable(const KayteProject &p, const QString &config)
 
 // Runs the Kayte compiler on `source`, printing its output without the banner
 // and with errors in the GCC form ("file:2:25: error: msg") that IDEs turn
-// into clickable problems — the compiler itself reports "Parser Error: msg
-// at 2:25 (Token: …)" or "… at line 3" without a file name.
+// into clickable problems - the compiler itself reports "Parser Error: msg
+// at 2:25 (Token: ...)" or "... at line 3" without a file name.
 int runCompiler(const QString &compiler, const QStringList &args,
                 const QString &workingDir, const QString &source)
 {
@@ -297,7 +297,7 @@ int kayteCliMain(int argc, char *argv[])
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral(
         "Builds and runs Kayte projects (.xproj) with the Kayte SDK bundled in KayteIDE.\n"
-        "Other arguments (--compile, --native, --run, --repl, …) go to the Kayte compiler."));
+        "Other arguments (--compile, --native, --run, --repl, ...) go to the Kayte compiler."));
     parser.addHelpOption();
     parser.addPositionalArgument(QStringLiteral("command"), QStringLiteral("build, run or clean"));
     parser.addPositionalArgument(QStringLiteral("project"),

@@ -23,7 +23,7 @@ if(PkgConfig_FOUND)
 endif()
 
 if(NOT LIBGIT2_FOUND)
-    message(STATUS "libgit2 not found via pkg-config – using FetchContent")
+    message(STATUS "libgit2 not found via pkg-config - using FetchContent")
     include(FetchContent)
     FetchContent_Declare(
             libgit2
@@ -82,7 +82,7 @@ add_library(KayteGitClient STATIC
         ${GIT_CLIENT_UI}
 )
 
-# Disable AUTOMOC on this target – we already ran moc manually above.
+# Disable AUTOMOC on this target - we already ran moc manually above.
 set_target_properties(KayteGitClient PROPERTIES AUTOMOC OFF)
 
 target_include_directories(KayteGitClient

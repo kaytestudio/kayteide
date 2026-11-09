@@ -136,20 +136,20 @@ void CliAgentClient::checkLogin(Provider p)
                          : QStringList { QStringLiteral("login"), QStringLiteral("status") });
 }
 
-void CliAgentClient::openTerminal(const QString &command)
+bool CliAgentClient::openTerminal(const QString &command)
 {
     LlmLog::write(QStringLiteral("terminal"), command);
 #if defined(Q_OS_MACOS)
     QString escaped = command;
     escaped.replace(QLatin1Char('\\'), QStringLiteral("\\\\"))
            .replace(QLatin1Char('"'), QStringLiteral("\\\""));
-    QProcess::startDetached(QStringLiteral("osascript"),
+    return QProcess::startDetached(QStringLiteral("osascript"),
         { QStringLiteral("-e"), QStringLiteral("tell application \"Terminal\""),
           QStringLiteral("-e"), QStringLiteral("activate"),
           QStringLiteral("-e"), QStringLiteral("do script \"%1\"").arg(escaped),
           QStringLiteral("-e"), QStringLiteral("end tell") });
 #elif defined(Q_OS_WIN)
-    QProcess::startDetached(QStringLiteral("cmd.exe"),
+    return QProcess::startDetached(QStringLiteral("cmd.exe"),
         { QStringLiteral("/c"), QStringLiteral("start"), QStringLiteral("cmd"),
           QStringLiteral("/k"), command });
 #else
@@ -161,15 +161,16 @@ void CliAgentClient::openTerminal(const QString &command)
         if (QStandardPaths::findExecutable(term.first()).isEmpty()) continue;
         QStringList args = term.mid(1);
         args << QStringLiteral("bash") << QStringLiteral("-lc") << shell;
-        if (QProcess::startDetached(term.first(), args)) return;
+        if (QProcess::startDetached(term.first(), args)) return true;
     }
+    return false;
 #endif
 }
 
 // ─── Running a request ────────────────────────────────────────────────────────
 
 void CliAgentClient::run(const QString &tag, Provider p, const QString &model,
-                         const QString &prompt, const QString &workingDir)
+                         const QString &prompt, const QString &workingDir, bool allowEdits)
 {
     abort(tag);
 
@@ -189,7 +190,8 @@ void CliAgentClient::run(const QString &tag, Provider p, const QString &model,
 
     QStringList args;
     if (p == Provider::Claude) {
-        // Read-only: Claude may read/search the project but never edit or run.
+        // Claude may read/search the project, and - in edit mode - change files
+        // (accepted without prompting); it never gets a shell.
         args << QStringLiteral("-p")
              << QStringLiteral("--output-format") << QStringLiteral("stream-json")
              << QStringLiteral("--verbose") << QStringLiteral("--include-partial-messages")
@@ -197,12 +199,16 @@ void CliAgentClient::run(const QString &tag, Provider p, const QString &model,
         if (!model.isEmpty()) args << QStringLiteral("--model") << model;
         args << QStringLiteral("--tools") << QStringLiteral("Read")
              << QStringLiteral("Grep") << QStringLiteral("Glob");
+        if (allowEdits)
+            args << QStringLiteral("Edit") << QStringLiteral("Write")
+                 << QStringLiteral("--permission-mode") << QStringLiteral("acceptEdits");
     } else {
         job.lastMessageFile = QDir::temp().filePath(
             QStringLiteral("kayte-codex-%1.txt").arg(QUuid::createUuid().toString(QUuid::Id128)));
         args << QStringLiteral("exec") << QStringLiteral("--json")
              << QStringLiteral("--skip-git-repo-check") << QStringLiteral("--ephemeral")
-             << QStringLiteral("--sandbox") << QStringLiteral("read-only")
+             << QStringLiteral("--sandbox")
+             << (allowEdits ? QStringLiteral("workspace-write") : QStringLiteral("read-only"))
              << QStringLiteral("--output-last-message") << job.lastMessageFile;
         if (!workingDir.isEmpty()) args << QStringLiteral("--cd") << workingDir;
         if (!model.isEmpty()) args << QStringLiteral("--model") << model;
@@ -224,9 +230,10 @@ void CliAgentClient::run(const QString &tag, Provider p, const QString &model,
 
     job.timer.start();
     m_jobs.insert(tag, job);
-    LlmLog::write(name(p), QStringLiteral("request [%1] model=%2 cwd=%3 prompt=%4 chars")
+    LlmLog::write(name(p), QStringLiteral("request [%1] model=%2 cwd=%3 prompt=%4 chars %5")
                                .arg(tag, model.isEmpty() ? QStringLiteral("default") : model,
-                                    workingDir).arg(prompt.size()));
+                                    workingDir).arg(prompt.size())
+                               .arg(allowEdits ? QStringLiteral("(can edit files)") : QStringLiteral("(read-only)")));
 
     // Asynchronous: feed the prompt once the process is up; never block the GUI.
     connect(proc, &QProcess::started, this, [proc, prompt] {
@@ -295,7 +302,7 @@ void CliAgentClient::handleClaudeEvent(const QString &tag, Job &job, const QJson
         } else if (evType == QLatin1String("content_block_start")) {
             const QJsonObject b = ev.value(QStringLiteral("content_block")).toObject();
             if (b.value(QStringLiteral("type")).toString() == QLatin1String("tool_use")) {
-                emit activity(tag, tr("Claude is using %1 on the project…")
+                emit activity(tag, tr("Claude is using %1 on the project...")
                                        .arg(b.value(QStringLiteral("name")).toString()));
                 // Keep the separate text segments around tool calls readable.
                 if (!job.text.isEmpty() && !job.text.endsWith(QLatin1Char('\n'))) {
@@ -349,7 +356,7 @@ void CliAgentClient::handleCodexEvent(const QString &tag, Job &job, const QJsonO
     } else if (type == QLatin1String("item.started") &&
                (itemType == QLatin1String("command_execution") ||
                 itemType == QLatin1String("file_change"))) {
-        emit activity(tag, tr("Codex is inspecting the project…"));
+        emit activity(tag, tr("Codex is inspecting the project..."));
     } else if (msgType == QLatin1String("agent_message_delta")) {
         const QString d = msg.value(QStringLiteral("delta")).toString();
         job.text += d;

@@ -73,9 +73,9 @@ WelcomeTabWidget::WelcomeTabWidget(QWidget *parent)
     struct Action { QString title, hint; void (WelcomeTabWidget::*signal)(); };
     const Action actions[] = {
         { tr("New File"),               tr("Start an empty document"),    &WelcomeTabWidget::newFileRequested },
-        { tr("Open File…"),             tr("Open an existing file"),      &WelcomeTabWidget::openFileRequested },
-        { tr("New Project…"),           tr("Create a Kayte project"),     &WelcomeTabWidget::newProjectRequested },
-        { tr("Open Project Folder…"),   tr("Browse an existing project"), &WelcomeTabWidget::openProjectRequested },
+        { tr("Open File..."),             tr("Open an existing file"),      &WelcomeTabWidget::openFileRequested },
+        { tr("New Project..."),           tr("Create a Kayte project"),     &WelcomeTabWidget::newProjectRequested },
+        { tr("Open Project Folder..."),   tr("Browse an existing project"), &WelcomeTabWidget::openProjectRequested },
     };
     for (int i = 0; i < 4; ++i) {
         QPushButton *card = makeCard(this, actions[i].title, actions[i].hint);

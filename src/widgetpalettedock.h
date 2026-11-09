@@ -1,5 +1,5 @@
 #pragma once
-// widgetpalettedock.h – KayteIDE
+// widgetpalettedock.h - KayteIDE
 // Left-side dock: categorised Qt6 widget palette for the visual .ui designer.
 // Each item is draggable onto the UiCanvasWidget.
 
@@ -42,10 +42,11 @@ public:
 private:
     void buildPalette();
 
-    // Helper: add a category with a list of {displayName, widgetType, faGlyph}
-    struct PaletteItem { QString label; QString type; const char *icon; };
+    // Helper: add a category with a list of {displayName, widgetType}. Icons
+    // come from componenticons.h, keyed by widget type / `categoryKey`.
+    struct PaletteItem { QString label; QString type; };
     PaletteListWidget *addCategory(const QString &title,
-                                   const char    *titleIcon,
+                                   const char    *categoryKey,
                                    const QList<PaletteItem> &items);
 
     QToolBox  *m_toolBox    { nullptr };

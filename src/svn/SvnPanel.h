@@ -1,5 +1,5 @@
 #pragma once
-// SvnPanel.h – QDockWidget that hosts the full SVN client UI within KaytEIDE.
+// SvnPanel.h - QDockWidget that hosts the full SVN client UI within KaytEIDE.
 // Embed into the IDE via:
 //   auto *panel = new Kayte::Svn::SvnPanel(this);
 //   addDockWidget(Qt::BottomDockWidgetArea, panel);

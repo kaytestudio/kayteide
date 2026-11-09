@@ -1,13 +1,13 @@
 #!/bin/bash
 #
-# kayte-container-run — build a Kayte program for Linux and run it in a fresh
+# kayte-container-run - build a Kayte program for Linux and run it in a fresh
 # Apple `container` VM (linux/arm64 natively, or linux/amd64 through
 # Rosetta 2), then delete every VM, image and temp file the run created.
 #
 # Nothing is reused between runs: each run copies the bundled Kayte SDK
 # (KayteIDE.app/Contents/tools/kayte), rebuilds its Linux builder image from
 # scratch with the SDK's own scripts/build-kayte-debian-container.sh
-# (Debian + fpc + Lazarus built from source — this takes a while), builds the
+# (Debian + fpc + Lazarus built from source - this takes a while), builds the
 # Linux Kayte compiler in it, compiles the program, and runs the result in a
 # clean Debian VM.
 #
@@ -228,7 +228,7 @@ if [ "$DEBUG" = 1 ]; then
 fi
 
 # ─── 2. Builder VM image + Linux Kayte compiler (SDK script) ────────────────
-say "Building the Linux builder image from scratch ($PLATFORM) — this takes a while"
+say "Building the Linux builder image from scratch ($PLATFORM) - this takes a while"
 logged "building the builder image" \
     env IMAGE_NAME="$IMAGE" DEBIAN_VERSION="$DEBIAN_VERSION" bash "$SDK_SCRIPT" image
 info "image $IMAGE ready"
@@ -291,7 +291,7 @@ if [ "$DEBUG" = 1 ]; then
         # gdb can't start the program itself. Rosetta's own debug stub can:
         # with ROSETTA_DEBUGSERVER_PORT set, the program waits at its first
         # instruction for a gdb remote connection.
-        info "amd64: the program is already started and paused — use 'continue' (not 'run')."
+        info "amd64: the program is already started and paused - use 'continue' (not 'run')."
         VM_CMD="ROSETTA_DEBUGSERVER_PORT=1234 '/work/out/$NAME'$ARGS_Q & \
                 sleep 2; \
                 exec gdb $GDB_OPTS -ex 'target remote 127.0.0.1:1234' '/work/out/$NAME'"

@@ -31,7 +31,7 @@ void GitBranchManager::buildUi() {
 
     auto *btnRow = new QHBoxLayout;
     m_btnCheckout = new QPushButton("Checkout", this);
-    m_btnNew      = new QPushButton("New…",     this);
+    m_btnNew      = new QPushButton("New...",     this);
     m_btnDelete   = new QPushButton("Delete",   this);
     btnRow->addWidget(m_btnCheckout);
     btnRow->addWidget(m_btnNew);

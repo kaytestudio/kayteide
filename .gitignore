@@ -7,3 +7,5 @@ docs
 ci/
 build/
 
+._*
+Icon

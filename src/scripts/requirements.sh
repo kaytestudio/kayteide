@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# requirements.sh — fetch and bundle KayteIDE's external toolchain (macOS).
+# requirements.sh - fetch and bundle KayteIDE's external toolchain (macOS).
 #
 # Installs/checks the host prerequisites (Rosetta 2, Xcode Command Line Tools,
 # Homebrew) and then places a self-contained toolchain inside the built app:
@@ -12,6 +12,7 @@
 #     qemu/       QEMU binaries + dylibs + firmware (relocated from Homebrew)
 #     kayte/      Kayte language SDK (github.com/ringsce/kayte-lang), built
 #                 in place with the bundled Lazarus; bin/kayte links to it
+#   (GnuCOBOL is installed system-wide with Homebrew: `brew install gnucobol`)
 #     env.sh      `source` it to put the bundled tools on PATH
 #     VERSIONS.txt
 #
@@ -24,9 +25,11 @@
 #   --keep-i386            keep the i386-darwin compiler/units (dropped by default)
 #   --kayte-ref REF        kayte-lang branch or tag to build (default: its default branch)
 #   --skip-xcode | --skip-fpc | --skip-lazarus | --skip-qemu | --skip-kayte
+#   --skip-cobol           don't install GnuCOBOL (cobc) with Homebrew
 #   --non-interactive      no terminal (KayteIDE's first-run setup): admin
 #                          password via the macOS dialog, and QEMU is skipped
-#                          with a warning when Homebrew is not installed
+#                          (as is GnuCOBOL) with a warning when Homebrew
+#                          is not installed
 #   --clean-cache          delete cached downloads first
 #   -h, --help
 #
@@ -60,6 +63,7 @@ SKIP_FPC=0
 SKIP_LAZARUS=0
 SKIP_QEMU=0
 SKIP_KAYTE=0
+SKIP_COBOL=0
 CLEAN_CACHE=0
 
 CACHE_DIR="$HOME/Library/Caches/KayteIDE/downloads"
@@ -82,7 +86,7 @@ usage() { sed -n '2,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0; }
 
 urlencode_path() { printf '%s' "$1" | sed 's/ /%20/g'; }
 
-# download URL DEST — cached, resumable, retried
+# download URL DEST - cached, resumable, retried
 download() {
     local url="$1" dest="$2"
     if [ -s "$dest" ]; then
@@ -119,6 +123,7 @@ while [ $# -gt 0 ]; do
         --skip-lazarus)     SKIP_LAZARUS=1 ;;
         --skip-qemu)        SKIP_QEMU=1 ;;
         --skip-kayte)       SKIP_KAYTE=1 ;;
+        --skip-cobol)       SKIP_COBOL=1 ;;
         --non-interactive)  NON_INTERACTIVE=1 ;;
         --kayte-ref)        KAYTE_REF="${2:?--kayte-ref needs a branch or tag}"; shift ;;
         --clean-cache)      CLEAN_CACHE=1 ;;
@@ -180,7 +185,7 @@ if [ "$SKIP_XCODE" = 0 ]; then
     if clt_ready; then
         ok "found at $(xcode-select -p)"
     else
-        info "launching the installer — accept the dialog to continue"
+        info "launching the installer - accept the dialog to continue"
         xcode-select --install 2>/dev/null || true
         waited=0
         until clt_ready; do
@@ -244,7 +249,7 @@ if [ "$SKIP_FPC" = 0 ]; then
 
     # Relocatable driver: ignores any system/user fpc.cfg and uses one that
     # points at the units shipped next to it, so the app can be moved freely.
-    # The paths must come from a cfg file — FPC does not use command-line -Fu
+    # The paths must come from a cfg file - FPC does not use command-line -Fu
     # paths when resolving units referenced from other .ppu files.
     cat > "$TOOLS_DIR/bin/fpc" <<'EOF'
 #!/bin/bash
@@ -288,7 +293,7 @@ fi
 # ─── Lazarus ─────────────────────────────────────────────────────────────────
 if [ "$SKIP_LAZARUS" = 0 ]; then
     step "Lazarus $LAZARUS_VERSION"
-    [ -x "$TOOLS_DIR/bin/fpc" ] || warn "no bundled FPC — Lazarus will not be able to compile"
+    [ -x "$TOOLS_DIR/bin/fpc" ] || warn "no bundled FPC - Lazarus will not be able to compile"
     download "$SF_URL/$LAZ_ZIP" "$CACHE_DIR/$LAZ_ZIP"
 
     info "extracting"
@@ -349,7 +354,7 @@ fi
 # Mach-O backend object). Re-running updates the checkout and rebuilds.
 if [ "$SKIP_KAYTE" = 0 ]; then
     step "Kayte SDK"
-    [ -x "$TOOLS_DIR/bin/lazbuild" ] || die "the Kayte SDK is built with the bundled Lazarus — install it first (don't pass --skip-lazarus on a fresh bundle)"
+    [ -x "$TOOLS_DIR/bin/lazbuild" ] || die "the Kayte SDK is built with the bundled Lazarus - install it first (don't pass --skip-lazarus on a fresh bundle)"
     command -v git   >/dev/null 2>&1 || die "git not found (it comes with the Xcode Command Line Tools)"
     command -v clang >/dev/null 2>&1 || die "clang not found (install the Xcode Command Line Tools)"
 
@@ -392,7 +397,7 @@ if [ "$SKIP_KAYTE" = 0 ]; then
     fi
 fi
 
-# ─── Homebrew (needed for QEMU) ──────────────────────────────────────────────
+# ─── Homebrew (needed for QEMU and GnuCOBOL) ──────────────────────────────────────────────
 ensure_brew() {
     if command -v brew >/dev/null 2>&1; then return 0; fi
     for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do
@@ -402,7 +407,7 @@ ensure_brew() {
         # Homebrew's installer needs a terminal (sudo, prompts).
         return 1
     fi
-    info "Homebrew not found — installing it"
+    info "Homebrew not found - installing it"
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
         || die "Homebrew installation failed"
     for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do
@@ -416,7 +421,7 @@ if [ "$SKIP_QEMU" = 0 ]; then
     step "QEMU"
     if ! ensure_brew; then
         warn "Homebrew is not installed, so QEMU was skipped. Install Homebrew"
-        warn "(https://brew.sh), then use Tools ▸ Install / Update Toolchain… again."
+        warn "(https://brew.sh), then use Tools > Install / Update Toolchain... again."
         SKIP_QEMU=1
     fi
 fi
@@ -481,6 +486,30 @@ if [ "$SKIP_QEMU" = 0 ]; then
     ok "QEMU $QEMU_VERSION bundled ($bins)"
 fi
 
+# ─── GnuCOBOL ────────────────────────────────────────────────────────────────
+# cobc is used from Homebrew's prefix rather than bundled: it needs its
+# config, copybooks and a C compiler at run time.
+if [ "$SKIP_COBOL" = 0 ]; then
+    step "GnuCOBOL"
+    if ! ensure_brew; then
+        warn "Homebrew is not installed, so GnuCOBOL was skipped. Install Homebrew"
+        warn "(https://brew.sh), then run: brew install gnucobol"
+        SKIP_COBOL=1
+    fi
+fi
+if [ "$SKIP_COBOL" = 0 ]; then
+    if brew list --formula gnucobol >/dev/null 2>&1; then
+        ok "brew: gnucobol already installed"
+    else
+        info "brew install gnucobol"
+        brew install gnucobol
+    fi
+    COBC="$(brew --prefix gnucobol)/bin/cobc"
+    [ -x "$COBC" ] || die "cobc not found after installing gnucobol"
+    ln -sf "$COBC" "$TOOLS_DIR/bin/cobc"
+    ok "GnuCOBOL $("$COBC" --version | head -1 | awk '{print $NF}') ($COBC)"
+fi
+
 # ─── env.sh + manifest ───────────────────────────────────────────────────────
 step "Finishing"
 cat > "$TOOLS_DIR/env.sh" <<'EOF'
@@ -497,6 +526,7 @@ EOF
     [ -x "$TOOLS_DIR/fpc/bin/fpc" ]        && echo "fpc:       $("$TOOLS_DIR/fpc/bin/fpc" -iV)"
     [ -x "$TOOLS_DIR/lazarus/lazbuild" ]   && echo "lazarus:   $LAZARUS_VERSION"
     [ -x "$TOOLS_DIR/qemu/bin/qemu-img" ]  && echo "qemu:      $("$TOOLS_DIR/qemu/bin/qemu-img" --version | head -1 | awk '{print $3}')"
+    [ -x "$TOOLS_DIR/bin/cobc" ]           && echo "gnucobol:  $("$TOOLS_DIR/bin/cobc" --version | head -1 | awk '{print $NF}')"
     [ -d "$TOOLS_DIR/kayte/.git" ]         && echo "kayte:     $(git -C "$TOOLS_DIR/kayte" describe --tags --always 2>/dev/null)"
     true
 } > "$TOOLS_DIR/VERSIONS.txt"

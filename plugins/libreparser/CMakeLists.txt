@@ -13,11 +13,11 @@ find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets)
 # ─── GTK4 (optional, alongside Qt6) ────────────────────────────────────────────
 # Qt6 remains the primary toolkit everywhere (KDE on Linux, and macOS). GTK4 is
 # additionally offered, behind KAYTE_GTK4_ENABLED, on:
-#   • Linux (any architecture)
-#   • macOS (any architecture)
+#   - Linux (any architecture)
+#   - macOS (any architecture)
 # It is never pulled in on other platforms (e.g. Windows, Android), and even on
 # Linux/macOS it only actually enables once pkg-config locates a real gtk4
-# installation below — this flag just decides whether we look.
+# installation below - this flag just decides whether we look.
 set(KAYTE_GTK4_TARGET_PLATFORM FALSE)
 if(UNIX AND NOT APPLE AND NOT ANDROID)
     set(KAYTE_GTK4_TARGET_PLATFORM TRUE)
@@ -32,12 +32,12 @@ if(KAYTE_GTK4_TARGET_PLATFORM)
         pkg_check_modules(GTK4 QUIET IMPORTED_TARGET gtk4)
         if(GTK4_FOUND)
             set(KAYTE_GTK4_AVAILABLE TRUE)
-            message(STATUS "GTK4 ${GTK4_VERSION} found (${CMAKE_SYSTEM_PROCESSOR}) – enabling KAYTE_GTK4_ENABLED")
+            message(STATUS "GTK4 ${GTK4_VERSION} found (${CMAKE_SYSTEM_PROCESSOR}) - enabling KAYTE_GTK4_ENABLED")
         else()
-            message(STATUS "GTK4 not found via pkg-config – GTK4 integration disabled")
+            message(STATUS "GTK4 not found via pkg-config - GTK4 integration disabled")
         endif()
     else()
-        message(STATUS "pkg-config not found – GTK4 integration disabled")
+        message(STATUS "pkg-config not found - GTK4 integration disabled")
     endif()
 else()
     message(STATUS "GTK4 integration not applicable on this platform/architecture")

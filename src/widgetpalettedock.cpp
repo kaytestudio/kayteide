@@ -1,4 +1,4 @@
-// widgetpalettedock.cpp – KayteIDE
+// widgetpalettedock.cpp - KayteIDE
 #include "widgetpalettedock.h"
 
 #if __has_include(<IconsFontAwesome6.h>)
@@ -15,12 +15,15 @@
 #  define ICON_FA_SLIDERS         "\xef\x87\x9e"
 #endif
 
+#include "componenticons.h"
+#include "InFormTypes.hpp"
+
 #include <QApplication>
 #include <QPixmap>
 #include <QPainter>
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PaletteListWidget – drag-enabled
+// PaletteListWidget - drag-enabled
 // ─────────────────────────────────────────────────────────────────────────────
 
 PaletteListWidget::PaletteListWidget(QWidget *parent)
@@ -114,8 +117,11 @@ WidgetPaletteDock::WidgetPaletteDock(const QFont &faFont, QWidget *parent)
 
     // Search bar
     m_searchEdit = new QLineEdit(body);
-    m_searchEdit->setPlaceholderText(
-        QString::fromUtf8(ICON_FA_MAGNIFYING_GLASS) + tr("  Filter widgets…"));
+    m_searchEdit->setPlaceholderText(tr("Filter widgets..."));
+    if (const QIcon search = glyphIcon(ICON_FA_MAGNIFYING_GLASS,
+                                       palette().color(QPalette::PlaceholderText), m_faFont);
+        !search.isNull())
+        m_searchEdit->addAction(search, QLineEdit::LeadingPosition);
     m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->setStyleSheet(QStringLiteral(
         "QLineEdit { border-radius: 4px; padding: 4px 8px; }"
@@ -138,115 +144,108 @@ WidgetPaletteDock::WidgetPaletteDock(const QFont &faFont, QWidget *parent)
 
 PaletteListWidget *WidgetPaletteDock::addCategory(
         const QString &title,
-        const char    *titleIcon,
+        const char    *categoryKey,
         const QList<PaletteItem> &items)
 {
     auto *list = new PaletteListWidget(m_toolBox);
 
     for (const PaletteItem &pi : items) {
-        auto *item = new QListWidgetItem(list);
-
-        // FA glyph as left decoration
-        QString display;
-        if (pi.icon && *pi.icon) {
-            QLabel lbl;
-            lbl.setFont(m_faFont);
-            display = QString::fromUtf8(pi.icon) + QStringLiteral("  ") + pi.label;
-        } else {
-            display = pi.label;
-        }
-        item->setText(display);
+        auto *item = new QListWidgetItem(componentIcon(pi.type, m_faFont), pi.label, list);
         item->setData(Qt::UserRole, pi.type);
         item->setToolTip(pi.type);
     }
 
-    QString tabLabel = QString::fromUtf8(titleIcon) +
-                       QStringLiteral("  ") + title;
-    m_toolBox->addItem(list, tabLabel);
+    m_toolBox->addItem(list, componentCategoryIcon(QLatin1String(categoryKey), m_faFont), title);
     return list;
 }
 
 void WidgetPaletteDock::buildPalette()
 {
     // ── Buttons ───────────────────────────────────────────────────────────────
-    addCategory(tr("Buttons"), ICON_FA_SQUARE_CHECK, {
-        { tr("Push Button"),    QStringLiteral("QPushButton"),   ICON_FA_SQUARE_CHECK },
-        { tr("Tool Button"),    QStringLiteral("QToolButton"),   ICON_FA_SQUARE_CHECK },
-        { tr("Radio Button"),   QStringLiteral("QRadioButton"),  ICON_FA_SQUARE_CHECK },
-        { tr("Check Box"),      QStringLiteral("QCheckBox"),     ICON_FA_SQUARE_CHECK },
-        { tr("Command Link"),   QStringLiteral("QCommandLinkButton"), ICON_FA_SQUARE_CHECK },
-        { tr("Dialog Buttons"), QStringLiteral("QDialogButtonBox"),   ICON_FA_SQUARE_CHECK },
+    addCategory(tr("Buttons"), "Buttons", {
+        { tr("Push Button"),    QStringLiteral("QPushButton") },
+        { tr("Tool Button"),    QStringLiteral("QToolButton") },
+        { tr("Radio Button"),   QStringLiteral("QRadioButton") },
+        { tr("Check Box"),      QStringLiteral("QCheckBox") },
+        { tr("Command Link"),   QStringLiteral("QCommandLinkButton") },
+        { tr("Dialog Buttons"), QStringLiteral("QDialogButtonBox") },
     });
 
     // ── Input ────────────────────────────────────────────────────────────────
-    addCategory(tr("Input"), ICON_FA_KEYBOARD, {
-        { tr("Line Edit"),      QStringLiteral("QLineEdit"),     ICON_FA_KEYBOARD },
-        { tr("Text Edit"),      QStringLiteral("QTextEdit"),     ICON_FA_KEYBOARD },
-        { tr("Plain Text Edit"),QStringLiteral("QPlainTextEdit"),ICON_FA_KEYBOARD },
-        { tr("Spin Box"),       QStringLiteral("QSpinBox"),      ICON_FA_KEYBOARD },
-        { tr("Double Spin Box"),QStringLiteral("QDoubleSpinBox"),ICON_FA_KEYBOARD },
-        { tr("Combo Box"),      QStringLiteral("QComboBox"),     ICON_FA_KEYBOARD },
-        { tr("Date Edit"),      QStringLiteral("QDateEdit"),     ICON_FA_KEYBOARD },
-        { tr("Time Edit"),      QStringLiteral("QTimeEdit"),     ICON_FA_KEYBOARD },
-        { tr("Date/Time Edit"), QStringLiteral("QDateTimeEdit"), ICON_FA_KEYBOARD },
-        { tr("Slider"),         QStringLiteral("QSlider"),       ICON_FA_SLIDERS  },
-        { tr("Dial"),           QStringLiteral("QDial"),         ICON_FA_SLIDERS  },
-        { tr("Key Sequence Edit"),QStringLiteral("QKeySequenceEdit"), ICON_FA_KEYBOARD },
+    addCategory(tr("Input"), "Input", {
+        { tr("Line Edit"),      QStringLiteral("QLineEdit") },
+        { tr("Text Edit"),      QStringLiteral("QTextEdit") },
+        { tr("Plain Text Edit"),QStringLiteral("QPlainTextEdit") },
+        { tr("Spin Box"),       QStringLiteral("QSpinBox") },
+        { tr("Double Spin Box"),QStringLiteral("QDoubleSpinBox") },
+        { tr("Combo Box"),      QStringLiteral("QComboBox") },
+        { tr("Date Edit"),      QStringLiteral("QDateEdit") },
+        { tr("Time Edit"),      QStringLiteral("QTimeEdit") },
+        { tr("Date/Time Edit"), QStringLiteral("QDateTimeEdit") },
+        { tr("Slider"),         QStringLiteral("QSlider") },
+        { tr("Dial"),           QStringLiteral("QDial") },
+        { tr("Key Sequence Edit"),QStringLiteral("QKeySequenceEdit") },
     });
 
     // ── Display ──────────────────────────────────────────────────────────────
-    addCategory(tr("Display"), ICON_FA_IMAGE, {
-        { tr("Label"),          QStringLiteral("QLabel"),        ICON_FA_IMAGE },
-        { tr("Pixmap"),         QStringLiteral("QLabel"),        ICON_FA_IMAGE },
-        { tr("LCD Number"),     QStringLiteral("QLCDNumber"),    ICON_FA_IMAGE },
-        { tr("Progress Bar"),   QStringLiteral("QProgressBar"),  ICON_FA_BARS  },
-        { tr("Calendar"),       QStringLiteral("QCalendarWidget"),ICON_FA_IMAGE },
-        { tr("Graphics View"),  QStringLiteral("QGraphicsView"), ICON_FA_IMAGE },
-        { tr("OpenGL Widget"),  QStringLiteral("QOpenGLWidget"), ICON_FA_IMAGE },
-        { tr("Web Engine View"),QStringLiteral("QWebEngineView"),ICON_FA_IMAGE },
+    addCategory(tr("Display"), "Display", {
+        { tr("Label"),          QStringLiteral("QLabel") },
+        { tr("Pixmap"),         QStringLiteral("QLabel") },
+        { tr("LCD Number"),     QStringLiteral("QLCDNumber") },
+        { tr("Progress Bar"),   QStringLiteral("QProgressBar") },
+        { tr("Calendar"),       QStringLiteral("QCalendarWidget") },
+        { tr("Graphics View"),  QStringLiteral("QGraphicsView") },
+        { tr("OpenGL Widget"),  QStringLiteral("QOpenGLWidget") },
+        { tr("Web Engine View"),QStringLiteral("QWebEngineView") },
     });
 
     // ── Item Views ───────────────────────────────────────────────────────────
-    addCategory(tr("Item Views"), ICON_FA_TABLE_CELLS, {
-        { tr("List View"),      QStringLiteral("QListView"),     ICON_FA_BARS  },
-        { tr("List Widget"),    QStringLiteral("QListWidget"),   ICON_FA_BARS  },
-        { tr("Tree View"),      QStringLiteral("QTreeView"),     ICON_FA_TABLE_CELLS },
-        { tr("Tree Widget"),    QStringLiteral("QTreeWidget"),   ICON_FA_TABLE_CELLS },
-        { tr("Table View"),     QStringLiteral("QTableView"),    ICON_FA_TABLE_CELLS },
-        { tr("Table Widget"),   QStringLiteral("QTableWidget"),  ICON_FA_TABLE_CELLS },
-        { tr("Column View"),    QStringLiteral("QColumnView"),   ICON_FA_TABLE_CELLS },
-        { tr("Undo View"),      QStringLiteral("QUndoView"),     ICON_FA_TABLE_CELLS },
+    addCategory(tr("Item Views"), "Item Views", {
+        { tr("List View"),      QStringLiteral("QListView") },
+        { tr("List Widget"),    QStringLiteral("QListWidget") },
+        { tr("Tree View"),      QStringLiteral("QTreeView") },
+        { tr("Tree Widget"),    QStringLiteral("QTreeWidget") },
+        { tr("Table View"),     QStringLiteral("QTableView") },
+        { tr("Table Widget"),   QStringLiteral("QTableWidget") },
+        { tr("Column View"),    QStringLiteral("QColumnView") },
+        { tr("Undo View"),      QStringLiteral("QUndoView") },
     });
 
     // ── Containers ───────────────────────────────────────────────────────────
-    addCategory(tr("Containers"), ICON_FA_OBJECT_GROUP, {
-        { tr("Group Box"),      QStringLiteral("QGroupBox"),     ICON_FA_OBJECT_GROUP },
-        { tr("Scroll Area"),    QStringLiteral("QScrollArea"),   ICON_FA_OBJECT_GROUP },
-        { tr("Tool Box"),       QStringLiteral("QToolBox"),      ICON_FA_OBJECT_GROUP },
-        { tr("Tab Widget"),     QStringLiteral("QTabWidget"),    ICON_FA_OBJECT_GROUP },
-        { tr("Stacked Widget"), QStringLiteral("QStackedWidget"),ICON_FA_OBJECT_GROUP },
-        { tr("Frame"),          QStringLiteral("QFrame"),        ICON_FA_OBJECT_GROUP },
-        { tr("Widget"),         QStringLiteral("QWidget"),       ICON_FA_OBJECT_GROUP },
-        { tr("Dock Widget"),    QStringLiteral("QDockWidget"),   ICON_FA_OBJECT_GROUP },
-        { tr("Splitter"),       QStringLiteral("QSplitter"),     ICON_FA_OBJECT_GROUP },
+    addCategory(tr("Containers"), "Containers", {
+        { tr("Group Box"),      QStringLiteral("QGroupBox") },
+        { tr("Scroll Area"),    QStringLiteral("QScrollArea") },
+        { tr("Tool Box"),       QStringLiteral("QToolBox") },
+        { tr("Tab Widget"),     QStringLiteral("QTabWidget") },
+        { tr("Stacked Widget"), QStringLiteral("QStackedWidget") },
+        { tr("Frame"),          QStringLiteral("QFrame") },
+        { tr("Widget"),         QStringLiteral("QWidget") },
+        { tr("Dock Widget"),    QStringLiteral("QDockWidget") },
+        { tr("Splitter"),       QStringLiteral("QSplitter") },
     });
 
     // ── Layouts ──────────────────────────────────────────────────────────────
-    addCategory(tr("Layouts"), ICON_FA_TABLE_CELLS, {
-        { tr("Vertical Layout"),    QStringLiteral("QVBoxLayout"),  ICON_FA_BARS },
-        { tr("Horizontal Layout"),  QStringLiteral("QHBoxLayout"),  ICON_FA_BARS },
-        { tr("Grid Layout"),        QStringLiteral("QGridLayout"),  ICON_FA_TABLE_CELLS },
-        { tr("Form Layout"),        QStringLiteral("QFormLayout"),  ICON_FA_TABLE_CELLS },
-        { tr("Spacer – H"),         QStringLiteral("QSpacerItem_H"),ICON_FA_BARS },
-        { tr("Spacer – V"),         QStringLiteral("QSpacerItem_V"),ICON_FA_BARS },
+    addCategory(tr("Layouts"), "Layouts", {
+        { tr("Vertical Layout"),    QStringLiteral("QVBoxLayout") },
+        { tr("Horizontal Layout"),  QStringLiteral("QHBoxLayout") },
+        { tr("Grid Layout"),        QStringLiteral("QGridLayout") },
+        { tr("Form Layout"),        QStringLiteral("QFormLayout") },
+        { tr("Spacer - H"),         QStringLiteral("QSpacerItem_H") },
+        { tr("Spacer - V"),         QStringLiteral("QSpacerItem_V") },
     });
 
     // ── Menu / Toolbar ───────────────────────────────────────────────────────
-    addCategory(tr("Menus & Bars"), ICON_FA_BARS, {
-        { tr("Menu Bar"),       QStringLiteral("QMenuBar"),      ICON_FA_BARS },
-        { tr("Tool Bar"),       QStringLiteral("QToolBar"),      ICON_FA_BARS },
-        { tr("Status Bar"),     QStringLiteral("QStatusBar"),    ICON_FA_BARS },
+    addCategory(tr("Menus && Bars"), "Menus & Bars", { // && - QToolBox treats & as a mnemonic
+        { tr("Menu Bar"),       QStringLiteral("QMenuBar") },
+        { tr("Tool Bar"),       QStringLiteral("QToolBar") },
+        { tr("Status Bar"),     QStringLiteral("QStatusBar") },
     });
+
+    // ── InForm (QB64) controls - see plugins/InForm ──────────────────────────
+    QList<PaletteItem> inform;
+    for (InForm::ControlType t : InForm::designableTypes())
+        inform.append({ QString::fromLatin1(InForm::typeInfo(t).name), InForm::paletteKey(t) });
+    addCategory(tr("InForm (QB64)"), "InForm", inform);
 }
 
 void WidgetPaletteDock::onSearchChanged(const QString &text)

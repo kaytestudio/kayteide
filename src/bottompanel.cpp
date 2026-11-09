@@ -160,6 +160,19 @@ QWidget *BottomPanel::createHeader()
                                QString(), tr("Kill Terminal"));
     connect(m_btnKillTerm, &QToolButton::clicked, this, &BottomPanel::killTerminal);
 
+    m_btnClaude = makeAction(header, QIcon(), tr("Claude"), tr("Start Claude Code in this terminal"));
+    m_btnClaude->setFixedWidth(54);
+    connect(m_btnClaude, &QToolButton::clicked, this, [this] {
+        showView(Terminal);
+        emit assistantCliRequested(QStringLiteral("claude"));
+    });
+    m_btnCodex = makeAction(header, QIcon(), tr("Codex"), tr("Start Codex in this terminal"));
+    m_btnCodex->setFixedWidth(48);
+    connect(m_btnCodex, &QToolButton::clicked, this, [this] {
+        showView(Terminal);
+        emit assistantCliRequested(QStringLiteral("codex"));
+    });
+
     m_btnClear = makeAction(header, style()->standardIcon(QStyle::SP_DialogResetButton),
                             QString(), tr("Clear"));
     connect(m_btnClear, &QToolButton::clicked, this, [this] {
@@ -195,6 +208,7 @@ QWidget *BottomPanel::createHeader()
 
     for (QWidget *w : std::initializer_list<QWidget *>{
              m_outputChannel, m_terminalPick, m_btnNewTerm, m_btnKillTerm,
+             m_btnClaude, m_btnCodex,
              m_btnClear, m_btnRefresh })
         hl->addWidget(w);
 
@@ -209,7 +223,8 @@ QWidget *BottomPanel::createHeader()
 
     // First terminal / channel exist before the header is built.
     for (int i = 0; i < m_terminals->count(); ++i)
-        m_terminalPick->addItem(QStringLiteral("%1: bash").arg(i + 1));
+        if (auto *t = qobject_cast<TerminalWidget *>(m_terminals->widget(i)))
+            m_terminalPick->addItem(QStringLiteral("%1: %2").arg(i + 1).arg(t->shellName()));
 
     return header;
 }
@@ -238,6 +253,8 @@ void BottomPanel::updateHeaderActions()
     m_terminalPick->setVisible(v == Terminal);
     m_btnNewTerm->setVisible(v == Terminal);
     m_btnKillTerm->setVisible(v == Terminal);
+    m_btnClaude->setVisible(v == Terminal);
+    m_btnCodex->setVisible(v == Terminal);
     m_btnClear->setVisible(v == Problems || v == Output || v == DebugConsole);
     m_btnRefresh->setVisible(v == Ports);
 }
@@ -316,6 +333,7 @@ void BottomPanel::updateProblemsBadge()
                                      : tr("PROBLEMS"));
     m_problemsTab->setToolTip(tr("%1 error(s), %2 warning(s)")
                                   .arg(m_errorCount).arg(m_warningCount));
+    emit problemCountsChanged(m_errorCount, m_warningCount);
 }
 
 void BottomPanel::onProblemDoubleClicked(QTreeWidgetItem *item, int)
@@ -455,7 +473,7 @@ QWidget *BottomPanel::createDebugConsoleView()
 
     m_debugView = makeConsole();
     m_debugView->setPlaceholderText(
-        tr("Start a debug session (Run ▸ Debug) to evaluate expressions here."));
+        tr("Start a debug session (Run > Debug) to evaluate expressions here."));
 
     m_debugInput = new QLineEdit(w);
     m_debugInput->setFont(monoFont());
@@ -537,7 +555,9 @@ QWidget *BottomPanel::createTerminalView()
     m_terminals = new QStackedWidget(this);
     // The header (and its picker) is built after the views, so the first
     // terminal is added directly and listed in createHeader().
-    m_terminals->addWidget(new TerminalWidget(m_terminals));
+    auto *term = new TerminalWidget(m_terminals);
+    m_terminals->addWidget(term);
+    watchTerminal(term);
     m_terminalSeq = 1;
     return m_terminals;
 }
@@ -551,7 +571,8 @@ TerminalWidget *BottomPanel::addTerminal()
 {
     auto *term = new TerminalWidget(m_terminals);
     m_terminals->addWidget(term);
-    m_terminalPick->addItem(QStringLiteral("%1: bash").arg(++m_terminalSeq));
+    watchTerminal(term);
+    m_terminalPick->addItem(QStringLiteral("%1: %2").arg(++m_terminalSeq).arg(term->shellName()));
     m_terminalPick->setCurrentIndex(m_terminalPick->count() - 1);
     showView(Terminal);
     return term;
@@ -559,12 +580,25 @@ TerminalWidget *BottomPanel::addTerminal()
 
 void BottomPanel::killTerminal()
 {
-    const int idx = m_terminals->currentIndex();
+    removeTerminal(m_terminals->currentWidget());
+}
+
+// Close a terminal tab when its shell exits (`exit`, Ctrl+D), like VS Code.
+// Queued so the widget isn't torn down inside its own signal; bound to `this`
+// so nothing runs once the panel itself is being destroyed.
+void BottomPanel::watchTerminal(TerminalWidget *term)
+{
+    connect(term, &TerminalWidget::shellExited, this,
+            [this, term] { removeTerminal(term); }, Qt::QueuedConnection);
+}
+
+void BottomPanel::removeTerminal(QWidget *w)
+{
+    const int idx = w ? m_terminals->indexOf(w) : -1;
     if (idx < 0) return;
-    QWidget *w = m_terminals->widget(idx);
     m_terminals->removeWidget(w);
     m_terminalPick->removeItem(idx);
-    w->deleteLater();   // TerminalWidget's destructor stops bash
+    w->deleteLater();   // TerminalWidget's destructor stops the shell
 
     if (m_terminals->count() == 0)
         addTerminal();

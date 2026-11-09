@@ -1,9 +1,9 @@
 #pragma once
-// Gtk4NewProjectDialog.h – plugins/project
+// Gtk4NewProjectDialog.h - plugins/project
 //
 // GTK4 counterpart to NewProjectDialog (Qt6): collects a project name and
 // project type and reports whether the user accepted or cancelled. Mirrors
-// libreparser's Gtk4Editor.h split — built only when KAYTE_GTK4_ENABLED is
+// libreparser's Gtk4Editor.h split - built only when KAYTE_GTK4_ENABLED is
 // defined (see plugins/project/CMakeLists.txt); on other builds
 // runGtk4NewProjectDialog() is a stub that reports "not accepted" without
 // opening any window.

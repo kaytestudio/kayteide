@@ -7,30 +7,30 @@ A polished Qt6 desktop GUI for running and visualising unit tests across **multi
 | Extension | Language | Runner |
 |-----------|----------|--------|
 | `.kayte`  | Kayte (BASIC-style) | `kayte <file>` interpreter |
-| `.c`      | C        | `gcc` → compile + run |
-| `.cpp` `.cxx` `.cc` | C++ | `g++` → compile + run |
+| `.c`      | C        | `gcc` -> compile + run |
+| `.cpp` `.cxx` `.cc` | C++ | `g++` -> compile + run |
 | `.h` `.hpp` `.hxx`  | C/C++ Header | `gcc`/`g++` `-fsyntax-only` |
 | `.php`    | PHP      | `php -f <file>` |
 | `.pl`     | Perl     | `perl -w <file>` |
-| `.pas`    | Pascal   | `fpc` → compile + run |
+| `.pas`    | Pascal   | `fpc` -> compile + run |
 | *(no ext / other)* | QTest binary | run directly with `-xml` |
 
 ## Features
 
-- **Multi-file queue** — add as many files as you like; they run sequentially
+- **Multi-file queue** - add as many files as you like; they run sequentially
 - **Drag-to-reorder** file list
-- **Results tab** — tree grouped by file; colour-coded PASS/FAIL/SKIP
-- **Source tab** — syntax-highlighted viewer (per-language) that auto-loads on selection
-- **Log tab** — live streaming raw output with colour highlights
-- **Filter bar** — narrow results by test name or message
-- **Summary bar** — total / passed / failed / skipped across all files
+- **Results tab** - tree grouped by file; colour-coded PASS/FAIL/SKIP
+- **Source tab** - syntax-highlighted viewer (per-language) that auto-loads on selection
+- **Log tab** - live streaming raw output with colour highlights
+- **Filter bar** - narrow results by test name or message
+- **Summary bar** - total / passed / failed / skipped across all files
 - **Dark Catppuccin-Mocha theme** built-in
 
 ## Build requirements
 
 | Tool  | Version |
 |-------|---------|
-| CMake | ≥ 3.21  |
+| CMake | >= 3.21  |
 | Qt    | 6.x (Core, Widgets, Test) |
 | C++   | 17      |
 
@@ -60,13 +60,13 @@ qt6-test-gui/
 ├── CMakeLists.txt
 ├── src/
 │   ├── main.cpp
-│   ├── LanguageRunner.h/.cpp       ← per-extension command builder
-│   ├── MultiTestProcess.h/.cpp     ← multi-language process runner + parser
-│   ├── SyntaxHighlighter.h/.cpp    ← C/C++, PHP, Perl, Pascal, Kayte highlighter
-│   ├── TestProcess.h/.cpp          ← QTest XML runner (existing)
-│   └── TestRunnerWindow.h/.cpp     ← main GUI window
+│   ├── LanguageRunner.h/.cpp       <- per-extension command builder
+│   ├── MultiTestProcess.h/.cpp     <- multi-language process runner + parser
+│   ├── SyntaxHighlighter.h/.cpp    <- C/C++, PHP, Perl, Pascal, Kayte highlighter
+│   ├── TestProcess.h/.cpp          <- QTest XML runner (existing)
+│   └── TestRunnerWindow.h/.cpp     <- main GUI window
 └── tests/
-    ├── SampleMathTests.cpp         ← Qt unit tests
+    ├── SampleMathTests.cpp         <- Qt unit tests
     ├── SampleStringTests.cpp
     ├── test_sample.c
     ├── test_sample.kayte

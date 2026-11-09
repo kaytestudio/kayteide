@@ -377,7 +377,7 @@ bool GitRepository::commit(const QString &message,
                             const QString &authorName,
                             const QString &authorEmail) {
     if (!isOpen()) return false;
-    emit operationStarted("Committing…");
+    emit operationStarted("Committing...");
 
     // Retrieve default sig if none supplied
     git_signature *sig = nullptr;
@@ -519,7 +519,7 @@ QString GitRepository::remoteUrl(const QString &name) const {
 
 bool GitRepository::fetch(const QString &remote) {
     if (!isOpen()) return false;
-    emit operationStarted(QString("Fetching '%1'…").arg(remote));
+    emit operationStarted(QString("Fetching '%1'...").arg(remote));
 
     RemotePtr r;
     if (!d->check(git_remote_lookup(&r.ptr, d->repo.get(), remote.toUtf8().constData()))) {
@@ -536,7 +536,7 @@ bool GitRepository::fetch(const QString &remote) {
 bool GitRepository::push(const QString &remote, const QString &branch) {
     if (!isOpen()) return false;
     const QString br = branch.isEmpty() ? currentBranch() : branch;
-    emit operationStarted(QString("Pushing '%1' → '%2'…").arg(br, remote));
+    emit operationStarted(QString("Pushing '%1' -> '%2'...").arg(br, remote));
 
     RemotePtr r;
     if (!d->check(git_remote_lookup(&r.ptr, d->repo.get(), remote.toUtf8().constData()))) {

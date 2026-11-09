@@ -111,7 +111,7 @@ qint64 searchBytes(const char *base, qint64 from, qint64 to, const QByteArray &n
 } // namespace
 
 // ═════════════════════════════════════════════════════════════════════════════
-// LargeFileView — construction, mapping, indexing
+// LargeFileView - construction, mapping, indexing
 // ═════════════════════════════════════════════════════════════════════════════
 
 LargeFileView::LargeFileView(QWidget *parent)
@@ -295,7 +295,7 @@ QByteArray LargeFileView::origLine(qint64 line, qint64 cap) const
     if (end > start && m_data[end - 1] == '\r') --end;
     QByteArray out(reinterpret_cast<const char *>(m_data + start),
                    cap < 0 ? end - start : qMin(end - start, cap));
-    if (clipped) out += " …";
+    if (clipped) out += " ...";
     return out;
 }
 
@@ -435,7 +435,7 @@ QByteArray LargeFileView::docLine(qint64 line, qint64 cap) const
     const Piece &p = m_pieces.at(idx);
     if (p.orig) return origLine(p.start + off, cap);
     const QByteArray &b = p.lines.at(off);
-    return (cap >= 0 && b.size() > cap) ? b.left(cap) + " …" : b;
+    return (cap >= 0 && b.size() > cap) ? b.left(cap) + " ..." : b;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -829,7 +829,7 @@ void LargeFileView::setSelection(qint64 anchorLine, qint64 cursorLine)
 }
 
 // Claim editing keys before the main window's menu shortcuts (Copy, Paste,
-// Undo, Save, …) so they act on this view while it has focus.
+// Undo, Save, ...) so they act on this view while it has focus.
 bool LargeFileView::event(QEvent *e)
 {
     if (e->type() == QEvent::ShortcutOverride) {
@@ -1067,7 +1067,7 @@ LargeFileTab::LargeFileTab(QWidget *parent)
     auto *fl = new QHBoxLayout(m_findBar);
     fl->setContentsMargins(8, 4, 8, 4);
     m_findEdit = new QLineEdit(m_findBar);
-    m_findEdit->setPlaceholderText(tr("Find in file…"));
+    m_findEdit->setPlaceholderText(tr("Find in file..."));
     auto *matchCase = new QCheckBox(tr("Match case"), m_findBar);
     auto *next = new QPushButton(tr("Find Next"), m_findBar);
     m_findStatus = new QLabel(m_findBar);
@@ -1086,7 +1086,7 @@ LargeFileTab::LargeFileTab(QWidget *parent)
     lay->addWidget(m_view, 1);
 
     auto find = [this, matchCase] {
-        m_findStatus->setText(tr("Searching…"));
+        m_findStatus->setText(tr("Searching..."));
         m_view->findNext(m_findEdit->text(),
                          matchCase->isChecked() ? Qt::CaseSensitive : Qt::CaseInsensitive);
     };
@@ -1160,7 +1160,7 @@ void LargeFileTab::save()
 bool LargeFileTab::saveAndWait()
 {
     if (!m_view->isModified()) return true;
-    QProgressDialog dlg(tr("Saving %1…").arg(QFileInfo(filePath()).fileName()), QString(), 0, 100, this);
+    QProgressDialog dlg(tr("Saving %1...").arg(QFileInfo(filePath()).fileName()), QString(), 0, 100, this);
     dlg.setWindowModality(Qt::WindowModal);
     dlg.setMinimumDuration(0);
     dlg.setValue(0);
@@ -1183,17 +1183,17 @@ void LargeFileTab::updateInfo()
     if (m_view->isSaving()) {
         state = tr("<b>saving %1%</b>").arg(qMax(0, m_savePct));
     } else if (m_view->isIndexing()) {
-        state = tr("indexing… %1 lines so far (read-only until done)").arg(loc.toString(m_view->lineCount()));
+        state = tr("indexing... %1 lines so far (read-only until done)").arg(loc.toString(m_view->lineCount()));
     } else {
         state = tr("%1 lines").arg(loc.toString(m_view->lineCount()));
         if (m_indexMs >= 0) state += tr(" (indexed in %1 s)").arg(m_indexMs / 1000.0, 0, 'f', 1);
     }
-    if (m_view->isModified() && !m_view->isSaving()) state += tr(" · <b>modified</b>");
+    if (m_view->isModified() && !m_view->isSaving()) state += tr(" | <b>modified</b>");
     if (!m_lastError.isEmpty())
-        state += tr(" · <span style='color:#e06c75'>save failed: %1</span>").arg(m_lastError.toHtmlEscaped());
+        state += tr(" | <span style='color:#e06c75'>save failed: %1</span>").arg(m_lastError.toHtmlEscaped());
 
-    m_info->setText(tr("<b>Large file mode</b> · %1 · %2 · Ln %3, Col %4 &nbsp;&nbsp;"
-                       "<span style='color:gray'>Ctrl+S save · Ctrl+Z undo · Ctrl+F find · "
+    m_info->setText(tr("<b>Large file mode</b> | %1 | %2 | Ln %3, Col %4 &nbsp;&nbsp;"
+                       "<span style='color:gray'>Ctrl+S save | Ctrl+Z undo | Ctrl+F find | "
                        "Ctrl+G go to line</span>")
                         .arg(formatBytes(m_view->fileSize()), state,
                              loc.toString(m_view->currentLine()),
@@ -1213,7 +1213,7 @@ void LargeFileTab::promptGoToLine()
     const qint64 max = m_view->lineCount();
     // QInputDialog::getInt is limited to int; 2 billion lines is plenty here.
     const int line = QInputDialog::getInt(this, tr("Go to Line"),
-                                          tr("Line (1 – %L1):").arg(max),
+                                          tr("Line (1 - %L1):").arg(max),
                                           int(m_view->currentLine()), 1,
                                           int(qMin<qint64>(max, INT_MAX)), 1, &ok);
     if (ok) m_view->goToLine(line);

@@ -1,5 +1,7 @@
 #include "CodeIndex.hpp"
 
+#include <utility>
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -169,8 +171,17 @@ CodeIndex::CodeIndex(QObject *parent)
     : QObject(parent)
 {
     connect(&m_watcher, &QFutureWatcher<IndexData>::finished, this, [this] {
-        m_data = m_watcher.result();
+        // Setting the empty future below makes the watcher report "finished"
+        // again; it has no result, and result() on it crashes.
+        const QFuture<IndexData> done = m_watcher.future();
+        if (done.isCanceled() || done.resultCount() == 0) return;
+        m_data = done.result();
         m_watcher.setFuture({});   // drop the future's copy of the index
+        // A project opened while indexing: index that one now.
+        if (const QString next = std::exchange(m_pendingRoot, QString()); !next.isEmpty()) {
+            m_watcher.setFuture(QtConcurrent::run(buildIndex, next));
+            return;
+        }
         emit ready();
     });
 }
@@ -200,7 +211,10 @@ QString CodeIndex::languageFor(const QString &fileName)
 
 void CodeIndex::build(const QString &projectRoot)
 {
-    if (m_watcher.isRunning()) return;
+    if (m_watcher.isRunning()) {
+        m_pendingRoot = projectRoot;   // built when the current one finishes
+        return;
+    }
     m_watcher.setFuture(QtConcurrent::run(buildIndex, projectRoot));
 }
 
@@ -214,7 +228,7 @@ QString CodeIndex::summary() const
     QStringList parts;
     for (auto it = m_data.filesPerLanguage.cbegin(); it != m_data.filesPerLanguage.cend(); ++it)
         parts << QStringLiteral("%1 %2").arg(it.key()).arg(it.value());
-    return parts.join(QStringLiteral(" · "));
+    return parts.join(QStringLiteral(" | "));
 }
 
 CodeChunk CodeIndex::materialize(int chunkIndex) const

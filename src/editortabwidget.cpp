@@ -9,6 +9,9 @@
 #include "pascalsyntaxhighlighter.h"
 #include "delphisyntaxhighlighter.h"
 #include "markdownsyntaxhighlighter.h"
+#include "cobolsyntaxhighlighter.h"
+#include "breadcrumbbar.h"
+#include "codesymbols.h"
 
 
 #include <QVBoxLayout>
@@ -60,7 +63,28 @@ EditorTabWidget::EditorTabWidget(const QString &filePath, QWidget *parent)
     editorLayout->addWidget(m_lineNumberArea); // Add line number area first
     editorLayout->addWidget(m_editor);         // Then add the editor
 
+    // Breadcrumbs above the editor (VS Code style).
+    m_breadcrumbs = new BreadcrumbBar(this);
+    layout->addWidget(m_breadcrumbs);
+    layout->setSpacing(0);
     layout->addWidget(m_editorPane);
+    connect(m_breadcrumbs, &BreadcrumbBar::openFileRequested, this, &EditorTabWidget::openFileRequested);
+    connect(m_breadcrumbs, &BreadcrumbBar::symbolActivated, this, &EditorTabWidget::goToLine);
+    m_symbolTimer = new QTimer(this);
+    m_symbolTimer->setSingleShot(true);
+    m_symbolTimer->setInterval(400);
+    connect(m_symbolTimer, &QTimer::timeout, this, [this] {
+        // Outlining huge files on every pause would stall typing.
+        const QString text = m_editor->document()->characterCount() < 4 * 1024 * 1024
+                             ? m_editor->toPlainText() : QString();
+        m_breadcrumbs->setSymbols(CodeSymbols::scan(text, m_filePath));
+    });
+    connect(m_editor->document(), &QTextDocument::contentsChanged, m_symbolTimer, qOverload<>(&QTimer::start));
+    connect(m_editor, &QPlainTextEdit::cursorPositionChanged, this, [this] {
+        if (m_crumbFile != m_filePath) updateBreadcrumbs();   // Save As, or a load finished
+        m_breadcrumbs->setCursorLine(m_editor->textCursor().blockNumber() + 1);
+    });
+    connect(this, &EditorTabWidget::titleChanged, this, &EditorTabWidget::updateBreadcrumbs);
 
     // Connect signals from m_editor to line number area and other updates
     connect(m_editor, &QPlainTextEdit::blockCountChanged, this, &EditorTabWidget::updateLineNumberAreaWidth);
@@ -93,6 +117,21 @@ EditorTabWidget::EditorTabWidget(const QString &filePath, QWidget *parent)
     updateLineNumberAreaWidth(m_editor->blockCount()); // Ensure initial width is set
 }
 
+void EditorTabWidget::updateBreadcrumbs()
+{
+    m_crumbFile = m_filePath;
+    m_breadcrumbs->setFile(m_filePath);
+    m_symbolTimer->start();
+}
+
+void EditorTabWidget::goToLine(int line)
+{
+    QTextCursor c(m_editor->document()->findBlockByNumber(qBound(0, line - 1, m_editor->blockCount() - 1)));
+    m_editor->setTextCursor(c);
+    m_editor->centerCursor();
+    m_editor->setFocus();
+}
+
 EditorTabWidget::~EditorTabWidget()
 {
     // Highlighters are parented to QTextDocument. When m_editor->document() is deleted,
@@ -116,7 +155,7 @@ bool EditorTabWidget::loadFile(const QString &filePath) {
         // Big file: read it off the GUI thread, then show it.
         m_filePath = filePath;
         m_editor->setReadOnly(true);
-        m_editor->setPlainText(tr("Loading %1 (%2 MB)…")
+        m_editor->setPlainText(tr("Loading %1 (%2 MB)...")
                                    .arg(info.fileName())
                                    .arg(info.size() / (1024.0 * 1024.0), 0, 'f', 1));
         auto *watcher = new QFutureWatcher<QString>(this);
@@ -204,6 +243,7 @@ void EditorTabWidget::setupHighlighters()
     m_pascalHighlighter = new PascalSyntaxHighlighter(doc);
     m_delphiHighlighter = new DelphiSyntaxHighlighter(doc);
     m_markdownHighlighter = new MarkdownSyntaxHighlighter(doc);
+    m_cobolHighlighter = new CobolSyntaxHighlighter(doc);
 
     m_currentHighlighter = nullptr;
 }
@@ -233,6 +273,9 @@ void EditorTabWidget::applyHighlighterForFile(const QString &filePath)
         m_currentHighlighter = m_pascalHighlighter;
     } else if (suffix == "dfm") {
         m_currentHighlighter = m_delphiHighlighter;
+    } else if (suffix == "cob" || suffix == "cbl" || suffix == "cpy" || suffix == "cobol"
+               || suffix == "ccp" || suffix == "cob85") {
+        m_currentHighlighter = m_cobolHighlighter;
     } else if (isMarkdownFile(filePath)) {
         m_currentHighlighter = m_markdownHighlighter;
     } else {
@@ -451,7 +494,7 @@ void EditorTabWidget::updateMarkdownMode()
 {
     const bool markdown = isMarkdownFile(m_filePath);
     if (markdown == (m_preview != nullptr)) {
-        if (markdown) renderPreview();   // e.g. reloaded or renamed .md → .markdown
+        if (markdown) renderPreview();   // e.g. reloaded or renamed .md -> .markdown
         return;
     }
 

@@ -9,7 +9,7 @@
 namespace {
 
 // Same starter document XmlEditorWindow.cpp's kDefaultTemplate loads for a
-// new, unnamed document — kept in sync by hand since the two are built for
+// new, unnamed document - kept in sync by hand since the two are built for
 // different toolkits and don't share a translation unit.
 constexpr char kDefaultTemplate[] = R"XML(<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE window SYSTEM "ui.dtd">
@@ -42,18 +42,18 @@ void activate(GtkApplication *app, gpointer user_data)
         if (g_file_get_contents(data->filePath.c_str(), &contents, &length, &error)) {
             xml.assign(contents, length);
             g_free(contents);
-            title = data->filePath + " — libreparser (GTK4)";
+            title = data->filePath + " - libreparser (GTK4)";
         } else {
             g_printerr("Cannot open %s: %s\n", data->filePath.c_str(),
                        error ? error->message : "unknown error");
             if (error)
                 g_error_free(error);
             xml = kDefaultTemplate;
-            title = "untitled.xml — libreparser (GTK4)";
+            title = "untitled.xml - libreparser (GTK4)";
         }
     } else {
         xml = kDefaultTemplate;
-        title = "untitled.xml — libreparser (GTK4)";
+        title = "untitled.xml - libreparser (GTK4)";
     }
 
     GtkWidget *window = gtk_application_window_new(app);

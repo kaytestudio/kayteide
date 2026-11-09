@@ -11,7 +11,8 @@ namespace Kayte::Llm {
 
 // Runs Claude (Claude Code CLI) and Codex (OpenAI Codex CLI) as the assistant's
 // cloud providers. Each request is a one-shot `claude -p` / `codex exec` run in
-// the project folder, read-only. Sign-in is done by the CLIs themselves
+// the project folder - read-only, or able to edit files (never run commands)
+// when the assistant's "Edit files" mode is on. Sign-in is done by the CLIs themselves
 // (`claude auth login`, `codex login`), so KayteIDE never handles credentials.
 //
 // Signals use the same (tag, text) shape as OllamaClient so the panel can treat
@@ -32,17 +33,19 @@ public:
     static QString installCommand(Provider p);
 
     void checkLogin(Provider p);
-    void openTerminal(const QString &command);   // Terminal.app / x-terminal-emulator / cmd
+    bool openTerminal(const QString &command);  // Terminal.app / x-terminal-emulator / cmd
 
+    // allowEdits: the agent may change files in workingDir (never run
+    // commands); otherwise it only reads.
     void run(const QString &tag, Provider p, const QString &model,
-             const QString &prompt, const QString &workingDir);
+             const QString &prompt, const QString &workingDir, bool allowEdits = false);
     void abort(const QString &tag);
     bool isBusy(const QString &tag) const { return m_jobs.contains(tag); }
 
 signals:
     void loginStatus(Kayte::Llm::CliAgentClient::Provider provider, bool installed,
                      bool loggedIn, const QString &detail);
-    void activity(const QString &tag, const QString &what);   // e.g. "Claude is reading files…"
+    void activity(const QString &tag, const QString &what);   // e.g. "Claude is reading files..."
     void token(const QString &tag, const QString &text);
     void finished(const QString &tag, const QString &fullText);
     void failed(const QString &tag, const QString &error);

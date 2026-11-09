@@ -14,6 +14,9 @@
 //         ci/vagrant/README.md for the one-time box setup this depends on).
 //   - On Linux: builds KayteIDE natively for whatever architecture the
 //     agent itself is (arm64 or amd64) - no VM needed there.
+//   - Windows on ARM64, when the WINDOWS_ARM64 parameter is ticked: a
+//     native build on an agent labelled `windows && arm64` (see
+//     ci/windows/build-arm64.ps1 for what that machine needs).
 
 pipeline {
     agent any
@@ -25,6 +28,13 @@ pipeline {
         // The Alpine and Debian build VMs are a shared resource - don't let
         // two builds fight over starting/stopping them at once.
         disableConcurrentBuilds()
+    }
+
+    parameters {
+        // Off until a Windows ARM64 agent exists - the stage would otherwise
+        // wait for one forever.
+        booleanParam(name: 'WINDOWS_ARM64', defaultValue: false,
+                     description: 'Also build KayteIDE for Windows on ARM64 (needs an agent labelled "windows && arm64")')
     }
 
     environment {
@@ -42,6 +52,10 @@ pipeline {
         MACOS_BUNDLE_IDENTIFIER = 'com.kd.kayteide'
         // Minimum macOS version the universal build supports at runtime.
         MACOS_DEPLOYMENT_TARGET = '12.0'
+
+        // Windows ARM64 build: official Qt for Windows on ARM64
+        // (win64_msvc2022_arm64), fetched by ci/windows/build-arm64.ps1.
+        QT_VERSION_WINDOWS_ARM64 = '6.11.2'
 
         // Linux native build (when the agent itself is Linux)
         QT_PATH_LINUX = '/opt/Qt/6.x.x/gcc_64'
@@ -229,6 +243,26 @@ pipeline {
                             sh "aws s3 cp '${path}' s3://your-release-bucket/kayteide/${env.RELEASE_CYCLE}/${fileName}"
                         }
                     }
+                }
+            }
+        }
+
+        stage('Windows ARM64: Build & Package') {
+            when {
+                beforeAgent true
+                expression { params.WINDOWS_ARM64 }
+            }
+            agent { label 'windows && arm64' }
+            steps {
+                checkout scm
+                powershell "ci\\windows\\build-arm64.ps1 -QtVersion ${env.QT_VERSION_WINDOWS_ARM64} -BuildNumber ${env.BUILD_NUMBER}"
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: 'build-windows-arm64/KayteIDE-windows-arm64-*.zip', fingerprint: true
+                }
+                always {
+                    cleanWs()
                 }
             }
         }

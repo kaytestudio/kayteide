@@ -6,8 +6,6 @@
 	<string>en</string>
 	<key>CFBundleExecutable</key>
 	<string>KayteIDE</string>
-	<key>CFBundleIconFile</key>
-	<string>resources/kayte.icns</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.kd.kayteide</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -18,8 +16,8 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
- 	<key>CFBundleIconFile</key>
-    	<string>kayte.icns</string>
+	<key>CFBundleIconFile</key>
+	<string>kayte.icns</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleVersion</key>

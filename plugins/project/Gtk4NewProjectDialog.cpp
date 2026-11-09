@@ -7,7 +7,7 @@
 namespace {
 
 // Kept in sync by hand with newprojectdialog.ui's projectTypeComboBox items
-// — the two dialogs are built for different toolkits and don't share a
+// - the two dialogs are built for different toolkits and don't share a
 // translation unit.
 constexpr const char *kProjectTypes[] = {
     "C++ Console Application",
@@ -23,7 +23,7 @@ struct DialogState {
 };
 
 // Reads the entry/dropdown into result, marks accepted, and closes the
-// window — shared by the OK button and Enter-in-the-name-entry.
+// window - shared by the OK button and Enter-in-the-name-entry.
 void accept(DialogState *state)
 {
     state->result.accepted = true;
